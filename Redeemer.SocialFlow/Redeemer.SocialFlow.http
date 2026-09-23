@@ -1,0 +1,6 @@
+@Redeemer.SocialFlow_HostAddress = http://localhost:5160
+
+GET {{Redeemer.SocialFlow_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
