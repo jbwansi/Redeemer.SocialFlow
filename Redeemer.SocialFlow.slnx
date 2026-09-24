@@ -1,3 +1,16 @@
 <Solution>
-  <Project Path="Redeemer.SocialFlow/Redeemer.SocialFlow.csproj" />
+  <Folder Name="/src/">
+    <Project Path="Redeemer.SocialFlow.Api/Redeemer.SocialFlow.Api.csproj" />
+    <Project Path="Redeemer.SocialFlow.Application/Redeemer.SocialFlow.Application.csproj" />
+    <Project Path="Redeemer.SocialFlow.Domain/Redeemer.SocialFlow.Domain.csproj" />
+    <Project Path="Redeemer.SocialFlow.Infrastructure/Redeemer.SocialFlow.Infrastructure.csproj" />
+    <Project Path="Redeemer.SocialFlow.Web/Redeemer.SocialFlow.Web.esproj">
+      <Build />
+      <Deploy />
+    </Project>
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="Redeemer.SocialFlow.IntegrationTests/Redeemer.SocialFlow.IntegrationTests.csproj" />
+    <Project Path="Redeemer.SocialFlow.UnitTests/Redeemer.SocialFlow.UnitTests.csproj" />
+  </Folder>
 </Solution>

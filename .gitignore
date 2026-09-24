@@ -361,3 +361,14 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+# Local SQLite databases
+*.db
+*.db-shm
+*.db-wal
+
+# React build and local configuration
+Redeemer.SocialFlow.Web/dist/
+Redeemer.SocialFlow.Web/.env.local
+Redeemer.SocialFlow.Web/.env.*.local
+
+Redeemer.SocialFlow.Web/.tools/
