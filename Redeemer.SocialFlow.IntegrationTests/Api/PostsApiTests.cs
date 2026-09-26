@@ -213,7 +213,8 @@ public sealed class PostsApiTests : IAsyncLifetime
         using var client = development.CreateClient();
         using var document = JsonDocument.Parse(await client.GetStringAsync("/openapi/v1.json"));
         var paths = document.RootElement.GetProperty("paths");
-        Assert.Equal(10, paths.EnumerateObject().Sum(path => path.Value.EnumerateObject().Count()));
+        Assert.Equal(12, paths.EnumerateObject().Sum(path => path.Value.EnumerateObject().Count()));
+        Assert.True(paths.GetProperty("/api/posts/generate-draft").GetProperty("post").GetProperty("responses").TryGetProperty("201", out _));
         Assert.True(paths.GetProperty("/api/posts").GetProperty("post").GetProperty("responses").TryGetProperty("201", out _));
         Assert.True(paths.GetProperty("/api/posts/{id}").GetProperty("delete").GetProperty("responses").TryGetProperty("204", out _));
         var parameters = paths.GetProperty("/api/posts").GetProperty("get").GetProperty("parameters");

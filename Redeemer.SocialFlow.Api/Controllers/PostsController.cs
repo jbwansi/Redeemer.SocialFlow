@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
+using Redeemer.SocialFlow.Api.Contracts;
+using Redeemer.SocialFlow.Application.AI;
 using Redeemer.SocialFlow.Application.SocialPosts;
 
 namespace Redeemer.SocialFlow.Api.Controllers;
@@ -10,6 +12,36 @@ namespace Redeemer.SocialFlow.Api.Controllers;
 [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError, "application/problem+json")]
 public sealed class PostsController(ISocialPostService posts) : ControllerBase
 {
+    [HttpPost("generate-draft")]
+    [EndpointSummary("Generate and save an AI-assisted draft post")]
+    [ProducesResponseType<GenerateSocialPostDraftResult>(StatusCodes.Status201Created)]
+    public async Task<ActionResult<GenerateSocialPostDraftResult>> GenerateDraft(
+        [FromBody] GenerateDraftRequest? request, CancellationToken cancellationToken)
+    {
+        if (request is null)
+            return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Invalid request",
+                detail: "A generation brief is required.");
+
+        try
+        {
+            // Resolve here so configuration failures receive the same safe response as generation failures.
+            var useCase = HttpContext.RequestServices.GetRequiredService<IGenerateSocialPostDraft>();
+            var result = await useCase.ExecuteAsync(new GenerateContentRequest(
+                request.Subject, request.Objective, request.Audience, request.Platform!.Value), cancellationToken);
+            return CreatedAtAction(nameof(GetById), new { id = result.Post.Id }, result);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return StatusCode(StatusCodes.Status499ClientClosedRequest);
+        }
+        catch (Exception)
+        {
+            // Provider exceptions can contain credentials and generated text; never forward or log them.
+            return Problem(statusCode: StatusCodes.Status500InternalServerError,
+                title: "Draft generation failed", detail: "The draft could not be generated and saved. Please try again later.");
+        }
+    }
+
     [HttpPost]
     [EndpointSummary("Create a draft post")]
     [ProducesResponseType<SocialPostDto>(StatusCodes.Status201Created)]

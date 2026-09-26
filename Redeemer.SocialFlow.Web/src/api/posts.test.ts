@@ -3,6 +3,35 @@ import { ApiError, postsApi } from './posts'
 import { post } from '../test/fixtures'
 
 describe('REST client', () => {
+  it('generates a draft through the production endpoint and preserves warnings', async () => {
+    const result = { post: post(), warnings: [' Review ', ' Review '] }
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify(result), { status: 201 }))
+    vi.stubGlobal('fetch', fetch)
+    const brief = {
+      subject: 'Sujet',
+      objective: 'Objectif',
+      audience: 'Public',
+      platform: 2 as const,
+    }
+    expect(await postsApi.generateDraft(brief)).toEqual(result)
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/posts/generate-draft',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify(brief) }),
+    )
+    fetch.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          title: 'Draft generation failed',
+          detail: 'Try again.',
+          traceId: 'trace-ai',
+        }),
+        { status: 500 },
+      ),
+    )
+    await expect(postsApi.generateDraft(brief)).rejects.toMatchObject({
+      problem: { status: 500, detail: 'Try again.', traceId: 'trace-ai' },
+    })
+  })
   it('encodes filters and forwards cancellation', async () => {
     const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify([post()])))
     vi.stubGlobal('fetch', fetch)

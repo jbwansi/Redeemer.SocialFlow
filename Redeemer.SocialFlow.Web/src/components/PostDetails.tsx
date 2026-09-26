@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { postsApi, type Post, type WorkflowAction } from '../api/posts'
 import { dateLabel, timeLabel, timezone } from '../lib/dates'
 import { ErrorNotice, Modal, PlatformLabel, StatusBadge } from './shared'
+import { AiReviewNotice } from './GenerateDraft'
 
 // Presentation hints only: the API validates every operation, including stale state.
 const actionLabels: Record<WorkflowAction, string> = {
@@ -17,12 +18,14 @@ export function PostDetails({
   edit,
   changed,
   removed,
+  warnings,
 }: {
   post: Post
   close: () => void
   edit: () => void
   changed: (post: Post) => void
   removed: () => void
+  warnings?: string[]
 }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<unknown>()
@@ -70,6 +73,7 @@ export function PostDetails({
   return (
     <Modal title={post.title} close={close} busy={busy}>
       <div className="post-details">
+        {warnings && <AiReviewNotice warnings={warnings} />}
         {error != null && <ErrorNotice error={error} />}
         <div className="detail-meta">
           <PlatformLabel platform={post.platform} />

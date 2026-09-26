@@ -14,6 +14,7 @@ import { Posts } from './pages/Posts'
 import { ErrorNotice } from './components/shared'
 import { PostEditor } from './components/PostEditor'
 import { PostDetails } from './components/PostDetails'
+import { GenerateDraft } from './components/GenerateDraft'
 
 type Page = 'dashboard' | 'calendar' | 'posts'
 const pages = {
@@ -47,6 +48,8 @@ export default function App() {
   const [selected, setSelected] = useState<Post>()
   const [editor, setEditor] = useState<{ post?: Post }>()
   const [notice, setNotice] = useState('')
+  const [generating, setGenerating] = useState(false)
+  const [aiWarnings, setAiWarnings] = useState<Record<string, string[]>>({})
   useEffect(() => {
     const handle = () => {
       setPage(currentPage())
@@ -170,6 +173,11 @@ export default function App() {
               <p>{pages[page].description}</p>
             </div>
             <div className="heading-actions">
+              {page === 'posts' && (
+                <button className="button" onClick={() => setGenerating(true)}>
+                  Générer avec l’IA
+                </button>
+              )}
               <button
                 className="icon-button refresh"
                 aria-label="Refresh posts"
@@ -220,9 +228,23 @@ export default function App() {
           </footer>
         </main>
       </div>
+      {generating && (
+        <GenerateDraft
+          close={() => setGenerating(false)}
+          saved={({ post, warnings }) => {
+            setAiWarnings((current) => ({ ...current, [post.id]: warnings }))
+            setGenerating(false)
+            setSelected(post)
+            setEditor({ post })
+            setNotice('Brouillon enregistré. Relisez le contenu généré avant validation.')
+            refresh()
+          }}
+        />
+      )}
       {editor && (
         <PostEditor
           post={editor.post}
+          warnings={editor.post ? aiWarnings[editor.post.id] : undefined}
           close={() => setEditor(undefined)}
           saved={(post) => {
             setEditor(undefined)
@@ -236,6 +258,7 @@ export default function App() {
         <PostDetails
           key={selected.id}
           post={selected}
+          warnings={aiWarnings[selected.id]}
           close={() => setSelected(undefined)}
           edit={() => setEditor({ post: selected })}
           changed={changed}

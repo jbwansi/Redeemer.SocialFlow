@@ -30,6 +30,16 @@ export interface CreatePost {
   content: string | null
   platform: Platform
 }
+export interface GenerateDraftRequest {
+  subject: string
+  objective: string
+  audience: string
+  platform: Platform
+}
+export interface GenerateSocialPostDraftResult {
+  post: Post
+  warnings: string[]
+}
 export interface UpdatePost {
   title: string
   content: string | null
@@ -94,6 +104,11 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return response.status === 204 ? (undefined as T) : (response.json() as Promise<T>)
 }
 export const postsApi = {
+  generateDraft: (data: GenerateDraftRequest) =>
+    request<GenerateSocialPostDraftResult>('/generate-draft', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
   list(filters: Filters = {}, signal?: AbortSignal) {
     const query = new URLSearchParams()
     Object.entries(filters).forEach(([key, value]) => {

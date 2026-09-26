@@ -8,6 +8,7 @@ public static class DependencyInjection
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
         services.AddScoped<ISocialPostService, SocialPostService>();
+        services.AddScoped<IGenerateSocialPostDraft, GenerateSocialPostDraft>();
         return services;
     }
 }

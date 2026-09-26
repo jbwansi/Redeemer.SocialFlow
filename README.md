@@ -100,6 +100,73 @@ summaries, filter parameters, and success/error status codes.
 Uses Microsoft.AspNetCore.OpenApi 10.0.12 and Scalar.AspNetCore 2.17.8 following the
 [Scalar ASP.NET Core integration](https://github.com/scalar/scalar/blob/main/documentation/integrations/aspnetcore/integration.md).
 
+## OpenAI editorial content generator
+
+Infrastructure implements the existing `IContentGenerator` with the official `OpenAI`
+NuGet package **2.14.0** and its `ResponsesClient`. The API composition root registers
+it lazily. Domain and the Application AI contract are
+unchanged. Missing OpenAI configuration does not prevent existing post operations.
+
+Configure the API host with user secrets in Development:
+
+```powershell
+dotnet user-secrets set --project Redeemer.SocialFlow.Api "OpenAI:ApiKey" "<your-api-key>"
+dotnet user-secrets set --project Redeemer.SocialFlow.Api "OpenAI:Model" "<your-responses-model>"
+```
+
+Alternatively, use `OpenAI__ApiKey` and `OpenAI__Model` environment variables or your
+deployment's secret configuration provider. Never commit a real key to appsettings,
+source files, or frontend configuration. Both settings are required when the generator
+is resolved. Choose a model available to your account that supports Responses and
+strict Structured Outputs; no model is silently selected for you.
+
+For a manual test, start the API in Development and send a request to the Development-only
+endpoint. The platform uses the API's numeric JSON enum values: 1 for Facebook, 2 for
+LinkedIn, or 3 for Instagram.
+
+```powershell
+dotnet run --project Redeemer.SocialFlow.Api -- --environment Development
+```
+
+In another terminal:
+
+```powershell
+Invoke-RestMethod -Method Post -Uri http://localhost:65475/api/dev/ai/generate -ContentType application/json -Body '{"subject":"Community day","objective":"Invite volunteers","audience":"Local families","platform":3}'
+```
+
+The response is `GeneratedContent`. This call does not create a SocialPost. The route is
+absent outside Development. Generator failures return a generic error. Development-only
+diagnostics log the exception type, OpenAI HTTP status, an allowlisted error code, and a
+fixed troubleshooting message. Unknown error codes are reported as `unrecognized`.
+Exception messages, headers, credentials, and generated content are never logged by
+this endpoint.
+
+Permanent Redeemer Holding instructions live in `RedeemerEditorialPolicy`: professional,
+clear copy; language of the brief (French when unclear); no invented statistics, studies,
+testimonials, clients, certifications, prices, partnerships or other facts. Missing or
+unverified facts are flagged in Warnings. Subject, Objective, Audience and Platform
+are serialized separately as untrusted user input, never interpolated into the policy.
+
+Requests use `text.format` with a strict JSON schema and `store: false`. As required by
+[OpenAI Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs),
+all keys are required in the JSON, with nullable CallToAction and VisualBrief representing
+optional values. Local validation also rejects blank Title/Content, malformed JSON,
+unexpected/missing/duplicate properties, wrong types, non-array Warnings, refusals and
+incomplete responses. Invalid results are retried up to **three total attempts**; exhausted
+attempts throw `ContentGenerationException` without exposing generated text. Caller
+cancellation and provider HTTP errors propagate. SDK transport retries are disabled.
+
+These controls enforce output structure and editorial instructions; they cannot prove
+the truth of generated claims. Drafts still need human factual review before publication.
+The SDK currently labels its Responses surface experimental (`OPENAI001`); suppression is
+limited to the implementation, registration and test files that use that surface.
+
+Focused tests use a fake HTTP transport under the real SDK, with no live OpenAI requests:
+
+```powershell
+dotnet test Redeemer.SocialFlow.UnitTests --filter FullyQualifiedName~OpenAIContentGeneratorTests
+```
+
 ## Verification
 
 The React + TypeScript frontend lives in `Redeemer.SocialFlow.Web`. It includes the

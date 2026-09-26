@@ -1645,3 +1645,19 @@ tbody tr:hover {
     transition: none !important;
   }
 }
+.ai-review-notice {
+  padding: 16px;
+  border-left: 3px solid #b42332;
+  background: #faf5f5;
+  border-radius: 6px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.ai-review-notice p {
+  margin: 8px 0;
+}
+.ai-review-notice ul {
+  margin: 8px 0 0;
+  padding-left: 20px;
+  white-space: pre-wrap;
+}
