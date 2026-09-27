@@ -57,6 +57,14 @@ public sealed class PostsController(ISocialPostService posts) : ControllerBase
     public async Task<ActionResult<SocialPostDto>> GetById(Guid id, CancellationToken cancellationToken) =>
         Ok(await posts.GetByIdAsync(id, cancellationToken) ?? throw new PostNotFoundException(id));
 
+    [HttpGet("trash")]
+    [EndpointSummary("List soft-deleted posts")]
+    [EndpointDescription("Read-only. Ordered by deletion time descending, then ID. No pagination.")]
+    [ProducesResponseType<IReadOnlyList<TrashedSocialPostDto>>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<TrashedSocialPostDto>>> Trash(
+        [FromServices] IListTrashedSocialPosts trash, CancellationToken cancellationToken) =>
+        Ok(await trash.ExecuteAsync(cancellationToken));
+
     [HttpGet]
     [EndpointSummary("List posts with optional platform, status, and creation date filters")]
     [EndpointDescription("Filters combine with AND. CreatedFrom and CreatedTo are inclusive DateTimeOffset instants on CreatedAt. Results are ordered newest first, then by ID. No pagination.")]
@@ -72,7 +80,7 @@ public sealed class PostsController(ISocialPostService posts) : ControllerBase
         Ok(await posts.UpdateAsync(id, request, cancellationToken));
 
     [HttpDelete("{id}")]
-    [EndpointSummary("Delete a draft or rejected post")]
+    [EndpointSummary("Soft-delete a draft, rejected or cancelled post")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {

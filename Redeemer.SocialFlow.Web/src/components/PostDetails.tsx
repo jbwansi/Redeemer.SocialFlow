@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { postsApi, type Post, type WorkflowAction } from '../api/posts'
 import { dateLabel, timeLabel, timezone } from '../lib/dates'
 import { ErrorNotice, Modal, PlatformLabel, StatusBadge } from './shared'
@@ -28,10 +28,12 @@ export function PostDetails({
   warnings?: string[]
 }) {
   const [busy, setBusy] = useState(false)
+  const deleting = useRef(false)
   const [error, setError] = useState<unknown>()
   const [date, setDate] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
   const editable = post.status === 1 || post.status === 6
+  const deletable = editable || post.status === 8
   const actions: WorkflowAction[] = editable
     ? ['submit-for-review']
     : post.status === 2
@@ -59,6 +61,8 @@ export function PostDetails({
     }
   }
   async function remove() {
+    if (deleting.current || busy || !confirmDelete) return
+    deleting.current = true
     setBusy(true)
     setError(undefined)
     try {
@@ -67,6 +71,7 @@ export function PostDetails({
     } catch (err) {
       setError(err)
     } finally {
+      deleting.current = false
       setBusy(false)
     }
   }
@@ -126,9 +131,12 @@ export function PostDetails({
         {confirmDelete && (
           <div className="delete-confirm" role="alert">
             <strong>Delete this post?</strong>
-            <p>This permanently removes the post.</p>
+            <p>
+              This moves the post to Corbeille and removes it from active views. Its history is
+              preserved.
+            </p>
             <button className="button danger" disabled={busy} onClick={remove}>
-              Confirm deletion
+              {busy ? 'Deleting…' : 'Confirm deletion'}
             </button>
             <button className="button" disabled={busy} onClick={() => setConfirmDelete(false)}>
               Keep post
@@ -137,19 +145,19 @@ export function PostDetails({
         )}
       </div>
       <footer className="modal-footer detail-actions">
+        {deletable && (
+          <button
+            className="text-button danger-text"
+            disabled={busy}
+            onClick={() => setConfirmDelete(true)}
+          >
+            Delete
+          </button>
+        )}
         {editable && (
-          <>
-            <button
-              className="text-button danger-text"
-              disabled={busy}
-              onClick={() => setConfirmDelete(true)}
-            >
-              Delete
-            </button>
-            <button className="button" disabled={busy} onClick={edit}>
-              Edit post
-            </button>
-          </>
+          <button className="button" disabled={busy} onClick={edit}>
+            Edit post
+          </button>
         )}
         {actions.map((action) => (
           <button

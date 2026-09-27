@@ -262,8 +262,8 @@ public class SocialPostTests
     [InlineData(SocialPostStatus.Scheduled, false)]
     [InlineData(SocialPostStatus.Published, false)]
     [InlineData(SocialPostStatus.Failed, false)]
-    [InlineData(SocialPostStatus.Cancelled, false)]
-    public void EnsureCanDelete_OnlyAllowsDraftAndRejectedWithoutMutation(SocialPostStatus status, bool allowed)
+    [InlineData(SocialPostStatus.Cancelled, true)]
+    public void EnsureCanDelete_OnlyAllowsDraftRejectedAndCancelledWithoutMutation(SocialPostStatus status, bool allowed)
     {
         var post = PostIn(status, new TestClock());
         var before = Snapshot(post);
@@ -275,6 +275,7 @@ public class SocialPostTests
     [Theory]
     [InlineData(SocialPostStatus.Draft)]
     [InlineData(SocialPostStatus.Rejected)]
+    [InlineData(SocialPostStatus.Cancelled)]
     public void SoftDelete_UsesClockAndBlocksAllMutations(SocialPostStatus status)
     {
         var clock = new TestClock();
@@ -299,7 +300,6 @@ public class SocialPostTests
     [InlineData(SocialPostStatus.Scheduled)]
     [InlineData(SocialPostStatus.Published)]
     [InlineData(SocialPostStatus.Failed)]
-    [InlineData(SocialPostStatus.Cancelled)]
     public void SoftDelete_RejectsNonDeletableStatuses(SocialPostStatus status)
     {
         var post = PostIn(status, new TestClock());

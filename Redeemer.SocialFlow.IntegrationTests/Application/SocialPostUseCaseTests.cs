@@ -105,7 +105,7 @@ public sealed class SocialPostUseCaseTests : IAsyncLifetime
         var expected = (status, operation) switch
         {
             (SocialPostStatus.Draft or SocialPostStatus.Rejected, Mutation.Update) => status,
-            (SocialPostStatus.Draft or SocialPostStatus.Rejected, Mutation.Delete) => status,
+            (SocialPostStatus.Draft or SocialPostStatus.Rejected or SocialPostStatus.Cancelled, Mutation.Delete) => status,
             (SocialPostStatus.Draft or SocialPostStatus.Rejected, Mutation.Submit) => SocialPostStatus.ReadyForReview,
             (SocialPostStatus.ReadyForReview, Mutation.Approve) => SocialPostStatus.Approved,
             (SocialPostStatus.ReadyForReview, Mutation.Reject) => SocialPostStatus.Rejected,

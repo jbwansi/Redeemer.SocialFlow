@@ -3,6 +3,17 @@ import { ApiError, postsApi } from './posts'
 import { post } from '../test/fixtures'
 
 describe('REST client', () => {
+  it('loads trash through the existing client with cancellation', async () => {
+    const deleted = { ...post(), deletedAt: '2026-09-27T10:00:00Z' }
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify([deleted])))
+    vi.stubGlobal('fetch', fetch)
+    const controller = new AbortController()
+    expect(await postsApi.trash(controller.signal)).toEqual([deleted])
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/posts/trash',
+      expect.objectContaining({ signal: controller.signal }),
+    )
+  })
   it('generates a draft through the production endpoint and preserves warnings', async () => {
     const result = { post: post(), warnings: [' Review ', ' Review '] }
     const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify(result), { status: 201 }))

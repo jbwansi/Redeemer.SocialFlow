@@ -6,17 +6,19 @@ import {
   Plus,
   ArrowUpRight,
   RefreshCw,
+  Trash2,
 } from 'lucide-react'
 import { postsApi, type Post, type Status } from './api/posts'
 import { Dashboard } from './pages/Dashboard'
 import { Calendar } from './pages/Calendar'
 import { Posts } from './pages/Posts'
+import { Trash } from './pages/Trash'
 import { ErrorNotice } from './components/shared'
 import { PostEditor } from './components/PostEditor'
 import { PostDetails } from './components/PostDetails'
 import { GenerateDraft } from './components/GenerateDraft'
 
-type Page = 'dashboard' | 'calendar' | 'posts'
+type Page = 'dashboard' | 'calendar' | 'posts' | 'trash'
 const pages = {
   dashboard: {
     title: 'Dashboard',
@@ -33,10 +35,15 @@ const pages = {
     description: 'Create, refine, and move your content forward.',
     icon: FileText,
   },
+  trash: {
+    title: 'Corbeille',
+    description: 'Publications supprimées · Consultation uniquement.',
+    icon: Trash2,
+  },
 }
 function currentPage(): Page {
   const hash = window.location.hash.slice(1)
-  return hash === 'calendar' || hash === 'posts' ? hash : 'dashboard'
+  return hash === 'calendar' || hash === 'posts' || hash === 'trash' ? hash : 'dashboard'
 }
 export default function App() {
   const [page, setPage] = useState<Page>(currentPage)
@@ -186,10 +193,12 @@ export default function App() {
               >
                 <RefreshCw size={18} />
               </button>
-              <button className="button primary" onClick={() => setEditor({})}>
-                <Plus size={18} />
-                Create post
-              </button>
+              {page !== 'trash' && (
+                <button className="button primary" onClick={() => setEditor({})}>
+                  <Plus size={18} />
+                  Create post
+                </button>
+              )}
             </div>
           </div>
           {notice && (
@@ -197,7 +206,9 @@ export default function App() {
               {notice}
             </div>
           )}
-          {page === 'posts' ? (
+          {page === 'trash' ? (
+            <Trash revision={revision} />
+          ) : page === 'posts' ? (
             <Posts
               key={`posts-${initialStatus ?? 'all'}`}
               open={setSelected}
@@ -263,8 +274,9 @@ export default function App() {
           edit={() => setEditor({ post: selected })}
           changed={changed}
           removed={() => {
+            setPosts((current) => current.filter((post) => post.id !== selected.id))
             setSelected(undefined)
-            setNotice('Post deleted.')
+            setNotice('Post moved to Corbeille.')
             refresh()
           }}
         />

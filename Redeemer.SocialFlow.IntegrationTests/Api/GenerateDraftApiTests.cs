@@ -25,6 +25,69 @@ public sealed class GenerateDraftApiTests : IAsyncLifetime
     private WebApplicationFactory<Program> _factory = null!;
     private static readonly GenerateContentRequest Request = new("Subject", "Objective", "Audience", SocialPlatform.LinkedIn);
 
+    [Fact]
+    public async Task Trash_ReturnsOnlyDeletedPostsWithDates_WithoutChangingAuditsOrNormalQueries()
+    {
+        using var client = _factory.CreateClient();
+        var generated = new List<GenerateSocialPostDraftResult>();
+        for (var index = 0; index < 3; index++)
+        {
+            using var response = await client.PostAsJsonAsync("/api/posts/generate-draft", Request);
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+            generated.Add((await response.Content.ReadFromJsonAsync<GenerateSocialPostDraftResult>())!);
+        }
+        Assert.Empty((await client.GetFromJsonAsync<TrashedSocialPostDto[]>("/api/posts/trash"))!);
+        // Include both currently deletable statuses.
+        using var submit = await client.PostAsync($"/api/posts/{generated[1].Post.Id}/submit-for-review", null);
+        Assert.Equal(HttpStatusCode.OK, submit.StatusCode);
+        using var reject = await client.PostAsync($"/api/posts/{generated[1].Post.Id}/reject", null);
+        Assert.Equal(HttpStatusCode.OK, reject.StatusCode);
+        foreach (var item in generated.Take(2))
+        {
+            using var response = await client.DeleteAsync($"/api/posts/{item.Post.Id}");
+            Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        }
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<SocialFlowDbContext>();
+        var auditsBefore = System.Text.Json.JsonSerializer.Serialize(await context.AiGenerations.AsNoTracking().OrderBy(x => x.Id).ToListAsync());
+        var query = scope.ServiceProvider.GetRequiredService<IListTrashedSocialPosts>();
+        var applicationResult = await query.ExecuteAsync();
+        Assert.Empty(context.ChangeTracker.Entries());
+        using var trashResponse = await client.GetAsync("/api/posts/trash");
+        Assert.Equal(HttpStatusCode.OK, trashResponse.StatusCode);
+        var trash = (await trashResponse.Content.ReadFromJsonAsync<TrashedSocialPostDto[]>())!;
+        Assert.Equal(applicationResult, trash);
+        Assert.Equal(2, trash.Length);
+        Assert.DoesNotContain(trash, post => post.Id == generated[2].Post.Id);
+        foreach (var item in trash)
+        {
+            var stored = await context.SocialPosts.IgnoreQueryFilters().AsNoTracking().SingleAsync(x => x.Id == item.Id);
+            Assert.True(stored.IsDeleted);
+            Assert.NotNull(stored.DeletedAt);
+            Assert.Equal(new TrashedSocialPostDto(stored.Id, stored.Title, stored.Platform, stored.Status,
+                stored.CreatedAt, stored.UpdatedAt, stored.DeletedAt.Value), item);
+            using var normalGet = await client.GetAsync($"/api/posts/{item.Id}");
+            Assert.Equal(HttpStatusCode.NotFound, normalGet.StatusCode);
+        }
+        var active = Assert.Single((await client.GetFromJsonAsync<SocialPostDto[]>("/api/posts"))!);
+        Assert.Equal(generated[2].Post.Id, active.Id);
+        Assert.Equal(generated[2].Post, await client.GetFromJsonAsync<SocialPostDto>($"/api/posts/{active.Id}"));
+        Assert.Equal(3, await context.SocialPosts.IgnoreQueryFilters().CountAsync());
+        Assert.Equal(auditsBefore, System.Text.Json.JsonSerializer.Serialize(await context.AiGenerations.AsNoTracking().OrderBy(x => x.Id).ToListAsync()));
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => query.ExecuteAsync(cancelled.Token));
+    }
+
+    [Fact]
+    public async Task Trash_EmptyDatabaseReturnsEmptyCollection()
+    {
+        using var client = _factory.CreateClient();
+        using var response = await client.GetAsync("/api/posts/trash");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Empty((await response.Content.ReadFromJsonAsync<TrashedSocialPostDto[]>())!);
+    }
+
     public async Task InitializeAsync()
     {
         _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder => builder

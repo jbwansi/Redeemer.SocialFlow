@@ -30,6 +30,15 @@ export interface CreatePost {
   content: string | null
   platform: Platform
 }
+export interface TrashedPost {
+  id: string
+  title: string
+  platform: Platform
+  status: Status
+  createdAt: string
+  updatedAt: string
+  deletedAt: string
+}
 export interface GenerateDraftRequest {
   subject: string
   objective: string
@@ -104,6 +113,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return response.status === 204 ? (undefined as T) : (response.json() as Promise<T>)
 }
 export const postsApi = {
+  trash: (signal?: AbortSignal) => request<TrashedPost[]>('/trash', { signal }),
   generateDraft: (data: GenerateDraftRequest) =>
     request<GenerateSocialPostDraftResult>('/generate-draft', {
       method: 'POST',

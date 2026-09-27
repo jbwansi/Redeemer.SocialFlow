@@ -55,6 +55,17 @@ describe('post editor', () => {
 })
 
 describe('workflow actions', () => {
+  it('shows only Delete for a Cancelled post and hides it for other non-deletable statuses', () => {
+    const props = { close: vi.fn(), edit: vi.fn(), changed: vi.fn(), removed: vi.fn() }
+    const view = render(<PostDetails post={post({ status: 8 })} {...props} />)
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Edit post' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Submit for review' })).not.toBeInTheDocument()
+    for (const status of [2, 3, 4, 5, 7] as Status[]) {
+      view.rerender(<PostDetails post={post({ status })} {...props} />)
+      expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument()
+    }
+  })
   it.each([
     [1, 'Submit for review', 'submit-for-review'],
     [6, 'Submit for review', 'submit-for-review'],
@@ -97,25 +108,28 @@ describe('workflow actions', () => {
       new Date('2027-03-14T12:30').toISOString(),
     )
   })
-  it('requires confirmation before deletion', async () => {
-    const remove = vi.spyOn(postsApi, 'remove').mockResolvedValue()
-    const removed = vi.fn()
-    render(
-      <PostDetails
-        post={post()}
-        close={vi.fn()}
-        edit={vi.fn()}
-        changed={vi.fn()}
-        removed={removed}
-      />,
-    )
-    await userEvent.click(screen.getByRole('button', { name: 'Delete' }))
-    expect(remove).not.toHaveBeenCalled()
-    await userEvent.click(screen.getByRole('button', { name: 'Confirm deletion' }))
-    expect(remove).toHaveBeenCalledWith('post-1')
-    expect(removed).toHaveBeenCalled()
-  })
-  it.each([5, 7, 8] as Status[])('has read-only controls for status %s', (status) => {
+  it.each([1, 6, 8] as Status[])(
+    'requires confirmation before deletion for status %s',
+    async (status) => {
+      const remove = vi.spyOn(postsApi, 'remove').mockResolvedValue()
+      const removed = vi.fn()
+      render(
+        <PostDetails
+          post={post({ status })}
+          close={vi.fn()}
+          edit={vi.fn()}
+          changed={vi.fn()}
+          removed={removed}
+        />,
+      )
+      await userEvent.click(screen.getByRole('button', { name: 'Delete' }))
+      expect(remove).not.toHaveBeenCalled()
+      await userEvent.click(screen.getByRole('button', { name: 'Confirm deletion' }))
+      expect(remove).toHaveBeenCalledWith('post-1')
+      expect(removed).toHaveBeenCalled()
+    },
+  )
+  it.each([5, 7] as Status[])('has read-only controls for status %s', (status) => {
     render(
       <PostDetails
         post={post({ status })}

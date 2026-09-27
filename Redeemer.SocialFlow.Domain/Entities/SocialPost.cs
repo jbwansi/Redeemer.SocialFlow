@@ -181,8 +181,8 @@ public class SocialPost
 	public void EnsureCanDelete()
 	{
 		EnsureNotDeleted();
-		if (Status != SocialPostStatus.Draft && Status != SocialPostStatus.Rejected)
-			throw new DomainException("Seule une publication brouillon ou rejetée peut être supprimée.");
+		if (Status is not (SocialPostStatus.Draft or SocialPostStatus.Rejected or SocialPostStatus.Cancelled))
+			throw new DomainException("Seule une publication brouillon, rejetée ou annulée peut être supprimée.");
 	}
 
 	public void SoftDelete()

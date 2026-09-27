@@ -79,6 +79,28 @@ public sealed class PostsApiTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task CancelledPost_CanBeSoftDeletedAndListedInTrash()
+    {
+        var post = await Create();
+        await Transition(post.Id, "submit-for-review", SocialPostStatus.ReadyForReview);
+        await Transition(post.Id, "approve", SocialPostStatus.Approved);
+        using var scheduled = await _client.PostAsJsonAsync($"/api/posts/{post.Id}/schedule", new SchedulePostRequest(DateTimeOffset.UtcNow.AddDays(1)));
+        Assert.Equal(HttpStatusCode.OK, scheduled.StatusCode);
+        await Transition(post.Id, "cancel", SocialPostStatus.Cancelled);
+        using var deleted = await _client.DeleteAsync($"/api/posts/{post.Id}");
+        Assert.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
+        await AssertProblem(await _client.GetAsync($"/api/posts/{post.Id}"), HttpStatusCode.NotFound);
+        Assert.Empty((await _client.GetFromJsonAsync<SocialPostDto[]>("/api/posts"))!);
+        var trash = Assert.Single((await _client.GetFromJsonAsync<TrashedSocialPostDto[]>("/api/posts/trash"))!);
+        Assert.Equal(post.Id, trash.Id);
+        Assert.Equal(SocialPostStatus.Cancelled, trash.Status);
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var stored = await scope.ServiceProvider.GetRequiredService<SocialFlowDbContext>().SocialPosts.IgnoreQueryFilters().SingleAsync();
+        Assert.True(stored.IsDeleted);
+        Assert.Equal(stored.DeletedAt, trash.DeletedAt);
+    }
+
+    [Fact]
     public async Task RejectedPost_CanBeDeleted()
     {
         var post = await Create();
@@ -213,7 +235,8 @@ public sealed class PostsApiTests : IAsyncLifetime
         using var client = development.CreateClient();
         using var document = JsonDocument.Parse(await client.GetStringAsync("/openapi/v1.json"));
         var paths = document.RootElement.GetProperty("paths");
-        Assert.Equal(12, paths.EnumerateObject().Sum(path => path.Value.EnumerateObject().Count()));
+        Assert.Equal(13, paths.EnumerateObject().Sum(path => path.Value.EnumerateObject().Count()));
+        Assert.True(paths.GetProperty("/api/posts/trash").GetProperty("get").GetProperty("responses").TryGetProperty("200", out _));
         Assert.True(paths.GetProperty("/api/posts/generate-draft").GetProperty("post").GetProperty("responses").TryGetProperty("201", out _));
         Assert.True(paths.GetProperty("/api/posts").GetProperty("post").GetProperty("responses").TryGetProperty("201", out _));
         Assert.True(paths.GetProperty("/api/posts/{id}").GetProperty("delete").GetProperty("responses").TryGetProperty("204", out _));
