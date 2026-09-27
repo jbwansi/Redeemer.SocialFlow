@@ -12,12 +12,16 @@ public sealed class GenerateSocialPostDraft(IContentGenerator generator, ISocial
     {
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
-        var generated = await generator.GenerateAsync(request, cancellationToken);
+        var generation = await generator.GenerateAsync(request, cancellationToken);
+        var generated = generation.Content;
         cancellationToken.ThrowIfCancellationRequested();
 
         var post = SocialPost.Create(generated.Title, generated.Content, request.Platform);
         post.Update(generated.Title, generated.Content, generated.CallToAction, generated.VisualBrief);
+        var audit = AiGeneration.Create(post.Id, request.Subject, request.Objective, request.Audience,
+            request.Platform, generation.Metadata.Provider, generation.Metadata.Model, generated.Warnings);
         context.SocialPosts.Add(post);
+        context.AiGenerations.Add(audit);
         await context.SaveChangesAsync(cancellationToken);
         return new GenerateSocialPostDraftResult(SocialPostDto.FromEntity(post), generated.Warnings);
     }

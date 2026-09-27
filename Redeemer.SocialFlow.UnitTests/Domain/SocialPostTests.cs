@@ -272,6 +272,42 @@ public class SocialPostTests
         Assert.Equal(before, Snapshot(post));
     }
 
+    [Theory]
+    [InlineData(SocialPostStatus.Draft)]
+    [InlineData(SocialPostStatus.Rejected)]
+    public void SoftDelete_UsesClockAndBlocksAllMutations(SocialPostStatus status)
+    {
+        var clock = new TestClock();
+        var post = PostIn(status, clock);
+        Assert.False(post.IsDeleted);
+        Assert.Null(post.DeletedAt);
+        clock.Now = clock.Now.AddHours(1);
+        post.SoftDelete();
+        Assert.True(post.IsDeleted);
+        Assert.Equal(clock.Now, post.DeletedAt);
+        Assert.Equal(clock.Now, post.UpdatedAt);
+        Assert.Equal(status, post.Status);
+        Assert.Throws<DomainException>(() => post.Update("T", "C", null, null));
+        Assert.Throws<DomainException>(post.SoftDelete);
+        foreach (var operation in Enum.GetValues<Operation>())
+            Assert.Throws<DomainException>(() => Apply(post, operation, clock.Now.AddDays(1)));
+    }
+
+    [Theory]
+    [InlineData(SocialPostStatus.ReadyForReview)]
+    [InlineData(SocialPostStatus.Approved)]
+    [InlineData(SocialPostStatus.Scheduled)]
+    [InlineData(SocialPostStatus.Published)]
+    [InlineData(SocialPostStatus.Failed)]
+    [InlineData(SocialPostStatus.Cancelled)]
+    public void SoftDelete_RejectsNonDeletableStatuses(SocialPostStatus status)
+    {
+        var post = PostIn(status, new TestClock());
+        Assert.Throws<DomainException>(post.SoftDelete);
+        Assert.False(post.IsDeleted);
+        Assert.Null(post.DeletedAt);
+    }
+
     private static SocialPost PostIn(SocialPostStatus status, TestClock clock)
     {
         var post = SocialPost.Create("Title", "Content", SocialPlatform.Facebook, clock);

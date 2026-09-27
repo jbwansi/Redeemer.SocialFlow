@@ -8,6 +8,7 @@ public sealed class SocialFlowDbContext(DbContextOptions<SocialFlowDbContext> op
     : DbContext(options), ISocialFlowDbContext
 {
     public DbSet<SocialPost> SocialPosts => Set<SocialPost>();
+    public DbSet<AiGeneration> AiGenerations => Set<AiGeneration>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

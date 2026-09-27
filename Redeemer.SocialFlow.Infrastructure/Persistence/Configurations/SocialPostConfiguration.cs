@@ -9,6 +9,9 @@ public sealed class SocialPostConfiguration : IEntityTypeConfiguration<SocialPos
     public void Configure(EntityTypeBuilder<SocialPost> builder)
     {
         builder.ToTable("SocialPosts");
+        builder.HasQueryFilter(post => !post.IsDeleted);
+        builder.Property(post => post.IsDeleted).HasDefaultValue(false).IsRequired();
+        builder.Property(post => post.DeletedAt).HasColumnType("TEXT").IsRequired(false);
         builder.HasKey(post => post.Id);
         builder.Property(post => post.Id).ValueGeneratedNever();
         builder.Property(post => post.Title).IsRequired();

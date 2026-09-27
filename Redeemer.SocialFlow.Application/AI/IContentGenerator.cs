@@ -2,7 +2,7 @@
 
 public interface IContentGenerator
 {
-	Task<GeneratedContent> GenerateAsync(
+	Task<ContentGenerationResult> GenerateAsync(
 		GenerateContentRequest request,
 		CancellationToken cancellationToken = default);
 }

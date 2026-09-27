@@ -114,8 +114,9 @@ public sealed class SocialPostPersistenceTests : IAsyncLifetime
         Assert.Equal("Microsoft.EntityFrameworkCore.Sqlite", context.Database.ProviderName);
         Assert.Equal(_databasePath, context.Database.GetDbConnection().DataSource);
         Assert.True(File.Exists(_databasePath));
-        var migration = Assert.Single(await context.Database.GetAppliedMigrationsAsync());
-        Assert.EndsWith("_InitialCreate", migration);
+        var migrations = (await context.Database.GetAppliedMigrationsAsync()).ToArray();
+        Assert.Equal(context.Database.GetMigrations(), migrations);
+        Assert.Contains(migrations, migration => migration.EndsWith("_AddAiGeneration"));
         Assert.Empty(await context.Database.GetPendingMigrationsAsync());
         Assert.False(context.Database.HasPendingModelChanges());
 

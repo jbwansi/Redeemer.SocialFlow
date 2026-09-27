@@ -63,6 +63,16 @@ public sealed class GenerateSocialPostDraftTests : IAsyncLifetime
         Assert.Null(saved.ScheduledAt);
         Assert.Null(saved.PublishedAt);
         Assert.Null(saved.VisualUrl);
+        var audit = Assert.Single(await readScope.ServiceProvider.GetRequiredService<SocialFlowDbContext>().AiGenerations.ToListAsync());
+        Assert.Equal(saved.Id, audit.SocialPostId);
+        Assert.Equal(Request.Subject, audit.Subject);
+        Assert.Equal(Request.Objective, audit.Objective);
+        Assert.Equal(Request.Audience, audit.Audience);
+        Assert.Equal(Request.Platform, audit.Platform);
+        Assert.Equal("TestProvider", audit.Provider);
+        Assert.Equal("test-model", audit.Model);
+        Assert.Equal(warnings, audit.Warnings);
+        Assert.NotEqual(default, audit.GeneratedAt);
     }
 
     [Theory]
@@ -85,6 +95,7 @@ public sealed class GenerateSocialPostDraftTests : IAsyncLifetime
         }
         await using var readScope = _provider.CreateAsyncScope();
         Assert.Empty(await readScope.ServiceProvider.GetRequiredService<ISocialPostService>().ListAsync());
+        Assert.Empty(await readScope.ServiceProvider.GetRequiredService<SocialFlowDbContext>().AiGenerations.ToListAsync());
     }
 
     public async Task DisposeAsync()
@@ -97,7 +108,7 @@ public sealed class GenerateSocialPostDraftTests : IAsyncLifetime
     {
         public GeneratedContent Result { get; set; } = new("Title", "Body", null, null, []);
         public bool Fail { get; set; }
-        public Task<GeneratedContent> GenerateAsync(GenerateContentRequest request, CancellationToken cancellationToken = default) =>
-            Fail ? Task.FromException<GeneratedContent>(new InvalidOperationException("Generation failed")) : Task.FromResult(Result);
+        public Task<ContentGenerationResult> GenerateAsync(GenerateContentRequest request, CancellationToken cancellationToken = default) =>
+            Fail ? Task.FromException<ContentGenerationResult>(new InvalidOperationException("Generation failed")) : Task.FromResult(new ContentGenerationResult(Result, new ContentGenerationMetadata("TestProvider", "test-model")));
     }
 }

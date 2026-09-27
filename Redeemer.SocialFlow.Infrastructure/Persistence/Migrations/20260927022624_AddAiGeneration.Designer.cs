@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Redeemer.SocialFlow.Infrastructure.Persistence;
 
@@ -10,9 +11,11 @@ using Redeemer.SocialFlow.Infrastructure.Persistence;
 namespace Redeemer.SocialFlow.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(SocialFlowDbContext))]
-    partial class SocialFlowDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260927022624_AddAiGeneration")]
+    partial class AddAiGeneration
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.12");
@@ -77,14 +80,6 @@ namespace Redeemer.SocialFlow.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset?>("DeletedAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER")
-                        .HasDefaultValue(false);
-
                     b.Property<int>("Platform")
                         .HasColumnType("INTEGER");
 
@@ -120,7 +115,7 @@ namespace Redeemer.SocialFlow.Infrastructure.Persistence.Migrations
                     b.HasOne("Redeemer.SocialFlow.Domain.Entities.SocialPost", null)
                         .WithMany()
                         .HasForeignKey("SocialPostId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 #pragma warning restore 612, 618

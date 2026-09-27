@@ -1,4 +1,4 @@
-﻿
+
 using Redeemer.SocialFlow.Domain.Enums;
 using Redeemer.SocialFlow.Domain.Exceptions;
 
@@ -13,6 +13,8 @@ public class SocialPost
 	private SocialPost(TimeProvider timeProvider) => _timeProvider = timeProvider;
 
 	public Guid Id { get; private set; }
+	public bool IsDeleted { get; private set; }
+	public DateTimeOffset? DeletedAt { get; private set; }
 
 	public string Title { get; private set; } = string.Empty;
 	public string Content { get; private set; } = string.Empty;
@@ -66,6 +68,7 @@ public class SocialPost
 		string? visualBrief,
 		string? visualUrl = null)
 	{
+		EnsureNotDeleted();
 		if (Status != SocialPostStatus.Draft &&
 			Status != SocialPostStatus.Rejected)
 			throw new DomainException(
@@ -86,6 +89,7 @@ public class SocialPost
 
 	public void SubmitForReview()
 	{
+		EnsureNotDeleted();
 		if (Status != SocialPostStatus.Draft &&
 			Status != SocialPostStatus.Rejected)
 			throw new DomainException(
@@ -101,6 +105,7 @@ public class SocialPost
 
 	public void Approve()
 	{
+		EnsureNotDeleted();
 		if (Status != SocialPostStatus.ReadyForReview)
 			throw new DomainException(
 				"Seule une publication en attente peut être approuvée.");
@@ -111,6 +116,7 @@ public class SocialPost
 
 	public void Reject()
 	{
+		EnsureNotDeleted();
 		if (Status != SocialPostStatus.ReadyForReview)
 			throw new DomainException(
 				"Seule une publication en attente peut être rejetée.");
@@ -121,6 +127,7 @@ public class SocialPost
 
 	public void Schedule(DateTimeOffset date)
 	{
+		EnsureNotDeleted();
 		if (Status != SocialPostStatus.Approved)
 			throw new DomainException(
 				"La publication doit être approuvée.");
@@ -137,6 +144,7 @@ public class SocialPost
 
 	public void MarkAsPublished()
 	{
+		EnsureNotDeleted();
 		if (Status != SocialPostStatus.Scheduled)
 			throw new DomainException(
 				"La publication doit être programmée.");
@@ -149,6 +157,7 @@ public class SocialPost
 
 	public void MarkAsFailed()
 	{
+		EnsureNotDeleted();
 		if (Status != SocialPostStatus.Scheduled)
 			throw new DomainException(
 				"Seule une publication programmée peut échouer.");
@@ -159,6 +168,7 @@ public class SocialPost
 
 	public void Cancel()
 	{
+		EnsureNotDeleted();
 		if (Status != SocialPostStatus.Scheduled)
 			throw new DomainException(
 				"Seule une publication programmée peut être annulée.");
@@ -170,7 +180,22 @@ public class SocialPost
 
 	public void EnsureCanDelete()
 	{
+		EnsureNotDeleted();
 		if (Status != SocialPostStatus.Draft && Status != SocialPostStatus.Rejected)
 			throw new DomainException("Seule une publication brouillon ou rejetée peut être supprimée.");
+	}
+
+	public void SoftDelete()
+	{
+		EnsureCanDelete();
+		var now = _timeProvider.GetUtcNow();
+		IsDeleted = true;
+		DeletedAt = now;
+		UpdatedAt = now;
+	}
+
+	private void EnsureNotDeleted()
+	{
+		if (IsDeleted) throw new DomainException("Cette publication a été supprimée.");
 	}
 }

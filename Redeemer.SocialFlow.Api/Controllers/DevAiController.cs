@@ -25,7 +25,7 @@ public sealed class DevAiController(IServiceProvider services, ILogger<DevAiCont
         try
         {
             var generator = services.GetRequiredService<IContentGenerator>();
-            return Ok(await generator.GenerateAsync(request, cancellationToken));
+            return Ok((await generator.GenerateAsync(request, cancellationToken)).Content);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

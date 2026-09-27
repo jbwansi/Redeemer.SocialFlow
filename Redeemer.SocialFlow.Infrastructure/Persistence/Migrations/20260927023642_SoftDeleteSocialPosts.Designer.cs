@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Redeemer.SocialFlow.Infrastructure.Persistence;
 
@@ -10,9 +11,11 @@ using Redeemer.SocialFlow.Infrastructure.Persistence;
 namespace Redeemer.SocialFlow.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(SocialFlowDbContext))]
-    partial class SocialFlowDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260927023642_SoftDeleteSocialPosts")]
+    partial class SoftDeleteSocialPosts
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.12");

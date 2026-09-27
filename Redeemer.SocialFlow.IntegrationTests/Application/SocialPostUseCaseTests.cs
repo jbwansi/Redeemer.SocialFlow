@@ -325,6 +325,7 @@ public sealed class SocialPostUseCaseTests : IAsyncLifetime
 
     private sealed class RecordingContext(SocialFlowDbContext inner) : ISocialFlowDbContext
     {
+        public DbSet<AiGeneration> AiGenerations => inner.AiGenerations;
         public List<CancellationToken> Tokens { get; } = [];
         public DbSet<SocialPost> SocialPosts => inner.SocialPosts;
         public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)

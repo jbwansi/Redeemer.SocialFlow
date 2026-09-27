@@ -61,6 +61,41 @@ public sealed class GenerateDraftApiTests : IAsyncLifetime
         Assert.Null(saved.ScheduledAt);
         Assert.Null(saved.PublishedAt);
         Assert.Null(saved.VisualUrl);
+        var audit = Assert.Single(await scope.ServiceProvider.GetRequiredService<SocialFlowDbContext>().AiGenerations.ToListAsync());
+        Assert.Equal(saved.Id, audit.SocialPostId);
+        Assert.Equal(result.Warnings, audit.Warnings);
+    }
+
+    [Fact]
+    public async Task Delete_HidesPostBlocksMutationsAndPreservesAudit()
+    {
+        using var client = _factory.CreateClient();
+        using var generated = await client.PostAsJsonAsync("/api/posts/generate-draft", Request);
+        var result = (await generated.Content.ReadFromJsonAsync<GenerateSocialPostDraftResult>())!;
+        var url = $"/api/posts/{result.Post.Id}";
+        using var deleted = await client.DeleteAsync(url);
+        Assert.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
+        using var get = await client.GetAsync(url);
+        Assert.Equal(HttpStatusCode.NotFound, get.StatusCode);
+        Assert.Empty((await client.GetFromJsonAsync<SocialPostDto[]>("/api/posts"))!);
+        using var update = await client.PutAsJsonAsync(url, new UpdatePostRequest("Changed", "Body"));
+        Assert.Equal(HttpStatusCode.NotFound, update.StatusCode);
+        foreach (var action in new[] { "submit-for-review", "approve", "reject", "schedule", "cancel" })
+        {
+            using var response = await client.PostAsJsonAsync($"{url}/{action}", new { scheduledAt = DateTimeOffset.UtcNow.AddDays(1) });
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        }
+        using var repeatedDelete = await client.DeleteAsync(url);
+        Assert.Equal(HttpStatusCode.NotFound, repeatedDelete.StatusCode);
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<SocialFlowDbContext>();
+        var stored = Assert.Single(await context.SocialPosts.IgnoreQueryFilters().ToListAsync());
+        Assert.True(stored.IsDeleted);
+        Assert.NotNull(stored.DeletedAt);
+        Assert.Equal(SocialPostStatus.Draft, stored.Status);
+        var audit = Assert.Single(await context.AiGenerations.ToListAsync());
+        Assert.Equal(stored.Id, audit.SocialPostId);
+        Assert.Equal(result.Warnings, audit.Warnings);
     }
 
     [Theory]
@@ -124,6 +159,7 @@ public sealed class GenerateDraftApiTests : IAsyncLifetime
     {
         await using var scope = _factory.Services.CreateAsyncScope();
         Assert.Empty(await scope.ServiceProvider.GetRequiredService<SocialFlowDbContext>().SocialPosts.ToListAsync());
+        Assert.Empty(await scope.ServiceProvider.GetRequiredService<SocialFlowDbContext>().AiGenerations.ToListAsync());
     }
 
     public async Task DisposeAsync()
@@ -138,11 +174,11 @@ public sealed class GenerateDraftApiTests : IAsyncLifetime
         public GenerateContentRequest? Received { get; private set; }
         public Exception? Failure { get; set; }
         public GeneratedContent Result { get; } = new("Title", "Body", "Act", "Visual", [" Review ", "", " Review "]);
-        public Task<GeneratedContent> GenerateAsync(GenerateContentRequest request, CancellationToken cancellationToken = default)
+        public Task<ContentGenerationResult> GenerateAsync(GenerateContentRequest request, CancellationToken cancellationToken = default)
         {
             Calls++;
             Received = request;
-            return Failure is null ? Task.FromResult(Result) : Task.FromException<GeneratedContent>(Failure);
+            return Failure is null ? Task.FromResult(new ContentGenerationResult(Result, new ContentGenerationMetadata("TestProvider", "test-model"))) : Task.FromException<ContentGenerationResult>(Failure);
         }
     }
 

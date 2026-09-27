@@ -60,8 +60,7 @@ public sealed class SocialPostService(ISocialFlowDbContext context) : ISocialPos
     {
         var post = await LoadAsync(id, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
-        post.EnsureCanDelete();
-        context.SocialPosts.Remove(post);
+        post.SoftDelete();
         await context.SaveChangesAsync(cancellationToken);
     }
 

@@ -267,6 +267,7 @@ public sealed class PostsApiTests : IAsyncLifetime
 
     private sealed class FailingContext : ISocialFlowDbContext
     {
+        public DbSet<AiGeneration> AiGenerations => throw new InvalidOperationException("secret-database");
         public DbSet<SocialPost> SocialPosts => throw new InvalidOperationException("secret-database connection details");
         public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default) => throw new InvalidOperationException("secret-database");
     }

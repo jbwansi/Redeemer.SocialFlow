@@ -56,6 +56,7 @@ public sealed class DevelopmentAiApiTests : IAsyncLifetime
         Assert.DoesNotContain(_logs.Messages, message => message.Contains("generated-content-private"));
         await using var scope = _factory.Services.CreateAsyncScope();
         Assert.Equal(0, await scope.ServiceProvider.GetRequiredService<SocialFlowDbContext>().SocialPosts.CountAsync());
+        Assert.Equal(0, await scope.ServiceProvider.GetRequiredService<SocialFlowDbContext>().AiGenerations.CountAsync());
     }
 
     [Theory]
@@ -204,11 +205,11 @@ public sealed class DevelopmentAiApiTests : IAsyncLifetime
         public Exception? Failure { get; set; }
         public GeneratedContent Result { get; } = new("Title", "generated-content-private", "Join us", "People together", ["Review date"]);
 
-        public Task<GeneratedContent> GenerateAsync(GenerateContentRequest request, CancellationToken cancellationToken = default)
+        public Task<ContentGenerationResult> GenerateAsync(GenerateContentRequest request, CancellationToken cancellationToken = default)
         {
             Received = request;
             if (Failure is not null) throw Failure;
-            return Task.FromResult(Result);
+            return Task.FromResult(new ContentGenerationResult(Result, new ContentGenerationMetadata("TestProvider", "test-model")));
         }
     }
 

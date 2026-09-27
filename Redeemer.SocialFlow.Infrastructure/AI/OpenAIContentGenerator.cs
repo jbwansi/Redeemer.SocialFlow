@@ -15,7 +15,7 @@ public sealed class OpenAIContentGenerator(
     private static readonly HashSet<string> OutputProperties =
         ["Title", "Content", "CallToAction", "VisualBrief", "Warnings"];
 
-    public async Task<GeneratedContent> GenerateAsync(
+    public async Task<ContentGenerationResult> GenerateAsync(
         GenerateContentRequest request,
         CancellationToken cancellationToken = default)
     {
@@ -75,7 +75,7 @@ public sealed class OpenAIContentGenerator(
 
             if (response.Status == ResponseStatus.Completed && response.Error is null && !refused &&
                 TryParse(response.GetOutputText(), out var generated))
-                return generated!;
+                return new ContentGenerationResult(generated!, new ContentGenerationMetadata("OpenAI", model));
         }
 
         throw new ContentGenerationException();

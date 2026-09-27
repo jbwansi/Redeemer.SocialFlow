@@ -29,6 +29,7 @@ public sealed class GenerateSocialPostDraftTests
             Assert.Same(request, received);
             Assert.Equal(cancellation.Token, token);
             Assert.Empty(context.Posts.Added);
+            Assert.Empty(context.Audits.Added);
             return Task.FromResult(Content);
         });
 
@@ -37,6 +38,12 @@ public sealed class GenerateSocialPostDraftTests
         Assert.Same(Content.Warnings, applicationResult.Warnings);
 
         var saved = Assert.Single(context.Posts.Added);
+        var audit = Assert.Single(context.Audits.Added);
+        Assert.Equal(saved.Id, audit.SocialPostId);
+        Assert.Equal(request.Subject, audit.Subject);
+        Assert.Equal("TestProvider", audit.Provider);
+        Assert.Equal("test-model", audit.Model);
+        Assert.Equal(Content.Warnings, audit.Warnings);
         Assert.Equal(saved.Id, result.Id);
         Assert.NotEqual(Guid.Empty, result.Id);
         Assert.Equal("Title", result.Title);
@@ -83,6 +90,7 @@ public sealed class GenerateSocialPostDraftTests
             new GenerateSocialPostDraft(generator, context).ExecuteAsync(Request));
         Assert.Same(failure, thrown);
         Assert.Empty(context.Posts.Added);
+        Assert.Empty(context.Audits.Added);
         Assert.Empty(context.SaveTokens);
     }
 
@@ -96,6 +104,7 @@ public sealed class GenerateSocialPostDraftTests
         await Assert.ThrowsAsync<DomainException>(() => new GenerateSocialPostDraft(generator, context)
             .ExecuteAsync(Request with { Platform = platform }));
         Assert.Empty(context.Posts.Added);
+        Assert.Empty(context.Audits.Added);
         Assert.Empty(context.SaveTokens);
     }
 
@@ -116,16 +125,17 @@ public sealed class GenerateSocialPostDraftTests
             new GenerateSocialPostDraft(generator, context).ExecuteAsync(Request, cancellation.Token));
         Assert.Equal(cancelBefore ? 0 : 1, generator.Calls);
         Assert.Empty(context.Posts.Added);
+        Assert.Empty(context.Audits.Added);
         Assert.Empty(context.SaveTokens);
     }
 
     private sealed class StubGenerator(Func<GenerateContentRequest, CancellationToken, Task<GeneratedContent>> generate) : IContentGenerator
     {
         public int Calls { get; private set; }
-        public Task<GeneratedContent> GenerateAsync(GenerateContentRequest request, CancellationToken cancellationToken = default)
+        public async Task<ContentGenerationResult> GenerateAsync(GenerateContentRequest request, CancellationToken cancellationToken = default)
         {
             Calls++;
-            return generate(request, cancellationToken);
+            return new ContentGenerationResult(await generate(request, cancellationToken), new ContentGenerationMetadata("TestProvider", "test-model"));
         }
     }
 
@@ -133,11 +143,24 @@ public sealed class GenerateSocialPostDraftTests
     {
         public RecordingSet Posts { get; } = new();
         public DbSet<SocialPost> SocialPosts => Posts;
+        public RecordingAuditSet Audits { get; } = new();
+        public DbSet<AiGeneration> AiGenerations => Audits;
         public List<CancellationToken> SaveTokens { get; } = [];
         public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {
             SaveTokens.Add(cancellationToken);
             return Task.FromResult(1);
+        }
+    }
+
+    private sealed class RecordingAuditSet : DbSet<AiGeneration>
+    {
+        public override Microsoft.EntityFrameworkCore.Metadata.IEntityType EntityType => throw new NotSupportedException();
+        public List<AiGeneration> Added { get; } = [];
+        public override EntityEntry<AiGeneration> Add(AiGeneration entity)
+        {
+            Added.Add(entity);
+            return null!;
         }
     }
 
