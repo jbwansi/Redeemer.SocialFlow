@@ -6,8 +6,11 @@ public sealed class DevelopmentOnlyControllerConvention : IApplicationModelConve
 {
     public void Apply(ApplicationModel application)
     {
-        var controller = application.Controllers.FirstOrDefault(model => model.ControllerType == typeof(DevAiController));
-        if (controller is not null)
+        foreach (var controller in application.Controllers.Where(model =>
+                     model.ControllerType == typeof(DevAiController) ||
+                     model.ControllerType == typeof(DevKnowledgeDocumentsController) ||
+                     model.ControllerType == typeof(DevLinkedInController) ||
+                     model.ControllerType == typeof(DevLinkedInPublicationController)).ToArray())
             application.Controllers.Remove(controller);
     }
 }

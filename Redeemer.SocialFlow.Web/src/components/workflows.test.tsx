@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { useState } from 'react'
 import { describe, it, expect, vi } from 'vitest'
 import { ApiError, postsApi, type Status } from '../api/posts'
 import { PostEditor } from './PostEditor'
@@ -55,6 +56,39 @@ describe('post editor', () => {
 })
 
 describe('workflow actions', () => {
+  it.each([1, 2, 3, 4, 5, 6, 7, 8] as Status[])(
+    'OK closes the modal without mutations for status %s',
+    async (status) => {
+      const transition = vi.spyOn(postsApi, 'transition')
+      const update = vi.spyOn(postsApi, 'update')
+      const remove = vi.spyOn(postsApi, 'remove')
+      const close = vi.fn()
+      function Details() {
+        const [open, setOpen] = useState(true)
+        return open ? (
+          <PostDetails
+            post={post({ status })}
+            close={() => {
+              close()
+              setOpen(false)
+            }}
+            edit={vi.fn()}
+            changed={vi.fn()}
+            removed={vi.fn()}
+          />
+        ) : null
+      }
+      render(<Details />)
+      if (status === 4)
+        expect(screen.getByRole('button', { name: 'Cancel schedule' })).toBeEnabled()
+      await userEvent.click(screen.getByRole('button', { name: 'OK' }))
+      expect(close).toHaveBeenCalledTimes(1)
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      expect(transition).not.toHaveBeenCalled()
+      expect(update).not.toHaveBeenCalled()
+      expect(remove).not.toHaveBeenCalled()
+    },
+  )
   it('shows only Delete for a Cancelled post and hides it for other non-deletable statuses', () => {
     const props = { close: vi.fn(), edit: vi.fn(), changed: vi.fn(), removed: vi.fn() }
     const view = render(<PostDetails post={post({ status: 8 })} {...props} />)
@@ -129,7 +163,7 @@ describe('workflow actions', () => {
       expect(removed).toHaveBeenCalled()
     },
   )
-  it.each([5, 7] as Status[])('has read-only controls for status %s', (status) => {
+  it.each([5, 7] as Status[])('has read-only controls for status %s', async (status) => {
     render(
       <PostDetails
         post={post({ status })}
@@ -141,7 +175,7 @@ describe('workflow actions', () => {
     )
     expect(screen.queryByRole('button', { name: 'Edit post' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument()
-    expect(screen.getAllByRole('button')).toHaveLength(1)
+    await waitFor(() => expect(screen.getAllByRole('button')).toHaveLength(2))
   })
   it('shows server rejection for a stale action without changing the post', async () => {
     vi.spyOn(postsApi, 'transition').mockRejectedValue(

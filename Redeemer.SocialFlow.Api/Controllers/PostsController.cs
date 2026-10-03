@@ -14,8 +14,10 @@ public sealed class PostsController(ISocialPostService posts) : ControllerBase
 {
     [HttpPost("generate-draft")]
     [EndpointSummary("Generate and save an AI-assisted draft post")]
-    [ProducesResponseType<GenerateSocialPostDraftResult>(StatusCodes.Status201Created)]
-    public async Task<ActionResult<GenerateSocialPostDraftResult>> GenerateDraft(
+    [EndpointDescription("201: Draft created. 200: NoRelevantPassages or ContextLimitExceeded, no post created and no editorial fallback. References are returned context, not persisted citations.")]
+    [ProducesResponseType<GenerateSocialPostDraftExecutionResult>(StatusCodes.Status201Created)]
+    [ProducesResponseType<GenerateSocialPostDraftExecutionResult>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<GenerateSocialPostDraftExecutionResult>> GenerateDraft(
         [FromBody] GenerateDraftRequest? request, CancellationToken cancellationToken)
     {
         if (request is null)
@@ -27,8 +29,10 @@ public sealed class PostsController(ISocialPostService posts) : ControllerBase
             // Resolve here so configuration failures receive the same safe response as generation failures.
             var useCase = HttpContext.RequestServices.GetRequiredService<IGenerateSocialPostDraft>();
             var result = await useCase.ExecuteAsync(new GenerateContentRequest(
-                request.Subject, request.Objective, request.Audience, request.Platform!.Value), cancellationToken);
-            return CreatedAtAction(nameof(GetById), new { id = result.Post.Id }, result);
+                request.Subject, request.Objective, request.Audience, request.Platform!.Value), request.Mode!.Value, cancellationToken);
+            if (result.Outcome != SocialPostDraftOutcome.Created)
+                return Ok(result);
+            return CreatedAtAction(nameof(GetById), new { id = result.PostId }, result);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

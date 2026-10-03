@@ -8,7 +8,7 @@ import {
   RefreshCw,
   Trash2,
 } from 'lucide-react'
-import { postsApi, type Post, type Status } from './api/posts'
+import { postsApi, type Post, type Status, type KnowledgePassage } from './api/posts'
 import { Dashboard } from './pages/Dashboard'
 import { Calendar } from './pages/Calendar'
 import { Posts } from './pages/Posts'
@@ -17,6 +17,7 @@ import { ErrorNotice } from './components/shared'
 import { PostEditor } from './components/PostEditor'
 import { PostDetails } from './components/PostDetails'
 import { GenerateDraft } from './components/GenerateDraft'
+import { LinkedInConnection } from './components/LinkedInConnection'
 
 type Page = 'dashboard' | 'calendar' | 'posts' | 'trash'
 const pages = {
@@ -57,6 +58,7 @@ export default function App() {
   const [notice, setNotice] = useState('')
   const [generating, setGenerating] = useState(false)
   const [aiWarnings, setAiWarnings] = useState<Record<string, string[]>>({})
+  const [aiReferences, setAiReferences] = useState<Record<string, KnowledgePassage[]>>({})
   useEffect(() => {
     const handle = () => {
       setPage(currentPage())
@@ -182,7 +184,7 @@ export default function App() {
             <div className="heading-actions">
               {page === 'posts' && (
                 <button className="button" onClick={() => setGenerating(true)}>
-                  Générer avec l’IA
+                  Générer un brouillon
                 </button>
               )}
               <button
@@ -201,6 +203,7 @@ export default function App() {
               )}
             </div>
           </div>
+          {import.meta.env.DEV && page === 'posts' && <LinkedInConnection />}
           {notice && (
             <div className="toast" role="status">
               {notice}
@@ -242,8 +245,9 @@ export default function App() {
       {generating && (
         <GenerateDraft
           close={() => setGenerating(false)}
-          saved={({ post, warnings }) => {
+          saved={({ draft: { post, warnings }, referencePassages }) => {
             setAiWarnings((current) => ({ ...current, [post.id]: warnings }))
+            setAiReferences((current) => ({ ...current, [post.id]: referencePassages }))
             setGenerating(false)
             setSelected(post)
             setEditor({ post })
@@ -256,6 +260,7 @@ export default function App() {
         <PostEditor
           post={editor.post}
           warnings={editor.post ? aiWarnings[editor.post.id] : undefined}
+          references={editor.post ? aiReferences[editor.post.id] : undefined}
           close={() => setEditor(undefined)}
           saved={(post) => {
             setEditor(undefined)
@@ -270,6 +275,7 @@ export default function App() {
           key={selected.id}
           post={selected}
           warnings={aiWarnings[selected.id]}
+          references={aiReferences[selected.id]}
           close={() => setSelected(undefined)}
           edit={() => setEditor({ post: selected })}
           changed={changed}

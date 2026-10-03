@@ -44,11 +44,37 @@ export interface GenerateDraftRequest {
   objective: string
   audience: string
   platform: Platform
+  mode: 1 | 2
 }
-export interface GenerateSocialPostDraftResult {
-  post: Post
-  warnings: string[]
+export interface KnowledgePassage {
+  knowledgeChunkId: string
+  knowledgeDocumentId: string
+  documentTitle: string
+  documentVersion: number
+  sourceType: number
+  authorityLevel: number
+  language: string
+  content: string
+  chunkIndex: number
+  pageNumber: number | null
+  section: string | null
 }
+export interface GeneratedDraftSuccess {
+  outcome: 1
+  postId: string
+  draft: { post: Post; warnings: string[] }
+  metadata: { provider: string; model: string }
+  referencePassages: KnowledgePassage[]
+}
+export type GenerateSocialPostDraftResult =
+  | GeneratedDraftSuccess
+  | {
+      outcome: 2 | 3
+      postId: null
+      draft: null
+      metadata: null
+      referencePassages: KnowledgePassage[]
+    }
 export interface UpdatePost {
   title: string
   content: string | null
@@ -77,10 +103,10 @@ export class ApiError extends Error {
   }
 }
 const baseUrl = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '')
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+export async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
   let response: Response
   try {
-    response = await fetch(`${baseUrl}/posts${path}`, {
+    response = await fetch(`${baseUrl}${path}`, {
       ...options,
       headers: {
         Accept: 'application/json, application/problem+json',
@@ -112,12 +138,14 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   }
   return response.status === 204 ? (undefined as T) : (response.json() as Promise<T>)
 }
+const request = <T>(path: string, options: RequestInit = {}) =>
+  apiRequest<T>(`/posts${path}`, options)
 export const postsApi = {
   trash: (signal?: AbortSignal) => request<TrashedPost[]>('/trash', { signal }),
-  generateDraft: (data: GenerateDraftRequest) =>
+  generateDraft: ({ subject, objective, audience, platform, mode }: GenerateDraftRequest) =>
     request<GenerateSocialPostDraftResult>('/generate-draft', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify({ subject, objective, audience, platform, mode }),
     }),
   list(filters: Filters = {}, signal?: AbortSignal) {
     const query = new URLSearchParams()

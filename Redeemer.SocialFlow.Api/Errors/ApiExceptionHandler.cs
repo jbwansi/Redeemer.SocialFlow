@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Redeemer.SocialFlow.Application.SocialPosts;
+using Redeemer.SocialFlow.Application.Knowledge;
 using Redeemer.SocialFlow.Domain.Exceptions;
 
 namespace Redeemer.SocialFlow.Api.Errors;
@@ -13,6 +14,7 @@ public sealed class ApiExceptionHandler(IProblemDetailsService problems, ILogger
         var (status, title, detail) = exception switch
         {
             PostNotFoundException => (404, "Post not found", exception.Message),
+            KnowledgeDocumentNotFoundException => (404, "Knowledge document not found", exception.Message),
             DomainException => (400, "Domain validation failed", exception.Message),
             ArgumentException { ParamName: "request" } => (400, "Invalid request", "The supplied request parameters are invalid. Check the date range."),
             _ => (500, "An unexpected error occurred", "The request could not be completed. Please try again later.")

@@ -1,8 +1,33 @@
 import { describe, it, expect, vi } from 'vitest'
 import { ApiError, postsApi } from './posts'
-import { post } from '../test/fixtures'
+import { post, generatedDraft } from '../test/fixtures'
 
 describe('REST client', () => {
+  it.each([2, 3] as const)(
+    'preserves HTTP 200 no-draft outcome %s and sends only brief fields',
+    async (outcome) => {
+      const result = { outcome, draft: null, postId: null, metadata: null, referencePassages: [] }
+      const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify(result), { status: 200 }))
+      vi.stubGlobal('fetch', fetch)
+      const brief = {
+        subject: 'S',
+        objective: 'O',
+        audience: 'A',
+        platform: 2 as const,
+        mode: 2 as const,
+        referencePassages: [{ content: 'Client reference' }],
+      }
+      expect(await postsApi.generateDraft(brief)).toEqual(result)
+      expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({
+        subject: 'S',
+        objective: 'O',
+        audience: 'A',
+        platform: 2,
+        mode: 2,
+      })
+      expect(fetch).toHaveBeenCalledTimes(1)
+    },
+  )
   it('loads trash through the existing client with cancellation', async () => {
     const deleted = { ...post(), deletedAt: '2026-09-27T10:00:00Z' }
     const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify([deleted])))
@@ -15,7 +40,7 @@ describe('REST client', () => {
     )
   })
   it('generates a draft through the production endpoint and preserves warnings', async () => {
-    const result = { post: post(), warnings: [' Review ', ' Review '] }
+    const result = generatedDraft({ draft: { post: post(), warnings: [' Review ', ' Review '] } })
     const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify(result), { status: 201 }))
     vi.stubGlobal('fetch', fetch)
     const brief = {
@@ -23,6 +48,7 @@ describe('REST client', () => {
       objective: 'Objectif',
       audience: 'Public',
       platform: 2 as const,
+      mode: 1 as const,
     }
     expect(await postsApi.generateDraft(brief)).toEqual(result)
     expect(fetch).toHaveBeenCalledWith(

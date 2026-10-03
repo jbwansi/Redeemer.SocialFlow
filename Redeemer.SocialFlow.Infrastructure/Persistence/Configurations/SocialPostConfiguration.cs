@@ -17,7 +17,8 @@ public sealed class SocialPostConfiguration : IEntityTypeConfiguration<SocialPos
         builder.Property(post => post.Title).IsRequired();
         builder.Property(post => post.Content).IsRequired();
         builder.Property(post => post.Platform).HasConversion<int>().IsRequired();
-        builder.Property(post => post.Status).HasConversion<int>().IsRequired();
+        // Prevent stale workflow updates from overwriting a concurrently confirmed publication.
+        builder.Property(post => post.Status).HasConversion<int>().IsRequired().IsConcurrencyToken();
         builder.Property(post => post.CallToAction).IsRequired(false);
         builder.Property(post => post.VisualBrief).IsRequired(false);
         builder.Property(post => post.VisualUrl).IsRequired(false);

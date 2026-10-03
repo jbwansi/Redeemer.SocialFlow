@@ -38,7 +38,8 @@ public sealed class OpenAIContentGenerator(
             var responseOptions = new CreateResponseOptions
             {
                 Model = model,
-                Instructions = RedeemerEditorialPolicy.Instructions,
+                Instructions = RedeemerEditorialPolicy.Instructions + (request.ReferencePassages.Count > 0
+                    ? "\n" + RedeemerEditorialPolicy.ReferenceInstructions : string.Empty),
                 StoredOutputEnabled = false,
                 TextOptions = new ResponseTextOptions
                 {
@@ -49,6 +50,9 @@ public sealed class OpenAIContentGenerator(
                 }
             };
             responseOptions.InputItems.Add(ResponseItem.CreateUserMessageItem(brief));
+            if (request.ReferencePassages.Count > 0)
+                responseOptions.InputItems.Add(ResponseItem.CreateUserMessageItem(
+                    JsonSerializer.Serialize(request.ReferencePassages)));
             if (attempt > 1)
                 responseOptions.InputItems.Add(ResponseItem.CreateUserMessageItem(
                     "The previous generation was invalid or incomplete. Generate a fresh, complete " +

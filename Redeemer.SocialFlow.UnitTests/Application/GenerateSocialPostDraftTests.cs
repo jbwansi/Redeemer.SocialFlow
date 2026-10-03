@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Redeemer.SocialFlow.Application.Abstractions;
 using Redeemer.SocialFlow.Application.AI;
 using Redeemer.SocialFlow.Application.SocialPosts;
+using Redeemer.SocialFlow.Application.Knowledge;
 using Redeemer.SocialFlow.Domain.Entities;
 using Redeemer.SocialFlow.Domain.Enums;
 using Redeemer.SocialFlow.Domain.Exceptions;
@@ -33,7 +34,7 @@ public sealed class GenerateSocialPostDraftTests
             return Task.FromResult(Content);
         });
 
-        var applicationResult = await new GenerateSocialPostDraft(generator, context).ExecuteAsync(request, cancellation.Token);
+        var applicationResult = await new GenerateSocialPostDraft(generator, context, new UnusedGroundedGenerator()).ExecuteAsync(request, cancellation.Token);
         var result = applicationResult.Post;
         Assert.Same(Content.Warnings, applicationResult.Warnings);
 
@@ -71,7 +72,7 @@ public sealed class GenerateSocialPostDraftTests
         var context = new RecordingContext();
         var generator = new StubGenerator((_, _) => Task.FromResult(generated));
 
-        var result = await new GenerateSocialPostDraft(generator, context).ExecuteAsync(Request);
+        var result = await new GenerateSocialPostDraft(generator, context, new UnusedGroundedGenerator()).ExecuteAsync(Request);
 
         Assert.Same(warnings, result.Warnings);
         Assert.Equal(warnings, result.Warnings);
@@ -87,7 +88,7 @@ public sealed class GenerateSocialPostDraftTests
         var failure = new InvalidOperationException("Generation failed");
         var generator = new StubGenerator((_, _) => Task.FromException<GeneratedContent>(failure));
         var thrown = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            new GenerateSocialPostDraft(generator, context).ExecuteAsync(Request));
+            new GenerateSocialPostDraft(generator, context, new UnusedGroundedGenerator()).ExecuteAsync(Request));
         Assert.Same(failure, thrown);
         Assert.Empty(context.Posts.Added);
         Assert.Empty(context.Audits.Added);
@@ -101,7 +102,7 @@ public sealed class GenerateSocialPostDraftTests
     {
         var context = new RecordingContext();
         var generator = new StubGenerator((_, _) => Task.FromResult(Content with { Title = title }));
-        await Assert.ThrowsAsync<DomainException>(() => new GenerateSocialPostDraft(generator, context)
+        await Assert.ThrowsAsync<DomainException>(() => new GenerateSocialPostDraft(generator, context, new UnusedGroundedGenerator())
             .ExecuteAsync(Request with { Platform = platform }));
         Assert.Empty(context.Posts.Added);
         Assert.Empty(context.Audits.Added);
@@ -122,11 +123,111 @@ public sealed class GenerateSocialPostDraftTests
         });
         if (cancelBefore) cancellation.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-            new GenerateSocialPostDraft(generator, context).ExecuteAsync(Request, cancellation.Token));
+            new GenerateSocialPostDraft(generator, context, new UnusedGroundedGenerator()).ExecuteAsync(Request, cancellation.Token));
         Assert.Equal(cancelBefore ? 0 : 1, generator.Calls);
         Assert.Empty(context.Posts.Added);
         Assert.Empty(context.Audits.Added);
         Assert.Empty(context.SaveTokens);
+    }
+
+    [Theory]
+    [InlineData(GroundedContentOutcome.Generated)]
+    [InlineData(GroundedContentOutcome.NoRelevantPassages)]
+    [InlineData(GroundedContentOutcome.ContextLimitExceeded)]
+    public async Task Grounded_OnlySuccessfulGenerationCreatesDraftAndPreservesReferences(GroundedContentOutcome outcome)
+    {
+        var context = new RecordingContext();
+        var editorial = new StubGenerator((_, _) => throw new InvalidOperationException("No fallback allowed"));
+        var passage = new KnowledgePassage(Guid.NewGuid(), Guid.NewGuid(), "Source", 1, SourceType.Other,
+            AuthorityLevel.Low, "fr", "Reference content", 0, null, null);
+        IReadOnlyList<KnowledgePassage> references = outcome == GroundedContentOutcome.Generated ? new[] { passage } : [];
+        using var cancellation = new CancellationTokenSource();
+        var grounded = new GroundedGenerator((request, token) =>
+        {
+            Assert.Same(Request, request);
+            Assert.Equal(cancellation.Token, token);
+            return Task.FromResult(new GroundedContentResult(outcome,
+                outcome == GroundedContentOutcome.Generated ? new(Content, new("Provider", "Model")) : null, references));
+        });
+        var result = await new GenerateSocialPostDraft(editorial, context, grounded)
+            .ExecuteAsync(Request, SocialPostGenerationMode.Grounded, cancellation.Token);
+        Assert.Equal(0, editorial.Calls);
+        if (outcome == GroundedContentOutcome.Generated)
+        {
+            Assert.Equal(SocialPostDraftOutcome.Created, result.Outcome);
+            Assert.Equal(Assert.Single(context.Posts.Added).Id, result.PostId);
+            Assert.Equal(SocialPostStatus.Draft, result.Draft!.Post.Status);
+            Assert.Same(Content.Warnings, result.Draft.Warnings);
+            Assert.Same(references, result.ReferencePassages);
+            Assert.Equal("Model", result.Metadata!.Model);
+            Assert.Equal("Provider", Assert.Single(context.Audits.Added).Provider);
+            Assert.Equal(cancellation.Token, Assert.Single(context.SaveTokens));
+        }
+        else
+        {
+            Assert.Equal(outcome == GroundedContentOutcome.NoRelevantPassages ? SocialPostDraftOutcome.NoRelevantPassages : SocialPostDraftOutcome.ContextLimitExceeded, result.Outcome);
+            Assert.Null(result.Draft);
+            Assert.Null(result.PostId);
+            Assert.Empty(context.Posts.Added);
+            Assert.Empty(context.Audits.Added);
+            Assert.Empty(context.SaveTokens);
+        }
+    }
+
+    [Theory]
+    [InlineData("error")]
+    [InlineData("invalid-content")]
+    [InlineData("cancel-before")]
+    [InlineData("cancel-during")]
+    [InlineData("invalid-result")]
+    public async Task Grounded_FailureOrCancellationDoesNotSave(string scenario)
+    {
+        var context = new RecordingContext();
+        var editorial = new StubGenerator((_, _) => throw new InvalidOperationException("No fallback"));
+        using var cancellation = new CancellationTokenSource();
+        var failure = new InvalidOperationException("Generation failure");
+        var grounded = new GroundedGenerator((_, _) =>
+        {
+            if (scenario == "error") throw failure;
+            if (scenario == "cancel-during") cancellation.Cancel();
+            var content = scenario == "invalid-content" ? Content with { Title = " " } : Content;
+            IReadOnlyList<KnowledgePassage> references = scenario == "invalid-result" ? [] :
+                [new(Guid.NewGuid(), Guid.NewGuid(), "Source", 1, SourceType.Other, AuthorityLevel.Low, "fr", "Text", 0, null, null)];
+            return Task.FromResult(new GroundedContentResult(GroundedContentOutcome.Generated, new(content, new("Provider", "Model")), references));
+        });
+        if (scenario == "cancel-before") cancellation.Cancel();
+        var exception = await Record.ExceptionAsync(() => new GenerateSocialPostDraft(editorial, context, grounded)
+            .ExecuteAsync(Request, SocialPostGenerationMode.Grounded, cancellation.Token));
+        Assert.NotNull(exception);
+        if (scenario == "error") Assert.Same(failure, exception);
+        if (scenario == "invalid-content") Assert.IsType<DomainException>(exception);
+        if (scenario.StartsWith("cancel")) Assert.IsAssignableFrom<OperationCanceledException>(exception);
+        Assert.Equal(0, editorial.Calls);
+        Assert.Empty(context.Posts.Added);
+        Assert.Empty(context.Audits.Added);
+        Assert.Empty(context.SaveTokens);
+    }
+
+    [Fact]
+    public async Task InvalidModeDoesNotGenerateOrSave()
+    {
+        var context = new RecordingContext();
+        var editorial = new StubGenerator((_, _) => throw new InvalidOperationException("Not called"));
+        await Assert.ThrowsAsync<ArgumentException>(() => new GenerateSocialPostDraft(editorial, context, new UnusedGroundedGenerator())
+            .ExecuteAsync(Request, (SocialPostGenerationMode)999));
+        Assert.Equal(0, editorial.Calls);
+        Assert.Empty(context.SaveTokens);
+    }
+
+    private sealed class GroundedGenerator(Func<GenerateContentRequest, CancellationToken, Task<GroundedContentResult>> generate) : IGenerateGroundedContent
+    {
+        public Task<GroundedContentResult> ExecuteAsync(GenerateContentRequest request, CancellationToken cancellationToken = default) => generate(request, cancellationToken);
+    }
+
+    private sealed class UnusedGroundedGenerator : IGenerateGroundedContent
+    {
+        public Task<GroundedContentResult> ExecuteAsync(GenerateContentRequest request, CancellationToken cancellationToken = default)
+            => throw new InvalidOperationException("Editorial generation must not invoke grounded generation.");
     }
 
     private sealed class StubGenerator(Func<GenerateContentRequest, CancellationToken, Task<GeneratedContent>> generate) : IContentGenerator

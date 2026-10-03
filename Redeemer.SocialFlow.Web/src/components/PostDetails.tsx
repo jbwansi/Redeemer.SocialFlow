@@ -1,8 +1,9 @@
 import { useRef, useState } from 'react'
-import { postsApi, type Post, type WorkflowAction } from '../api/posts'
+import { postsApi, type Post, type WorkflowAction, type KnowledgePassage } from '../api/posts'
 import { dateLabel, timeLabel, timezone } from '../lib/dates'
 import { ErrorNotice, Modal, PlatformLabel, StatusBadge } from './shared'
 import { AiReviewNotice } from './GenerateDraft'
+import { LinkedInPublication } from './LinkedInPublication'
 
 // Presentation hints only: the API validates every operation, including stale state.
 const actionLabels: Record<WorkflowAction, string> = {
@@ -19,6 +20,7 @@ export function PostDetails({
   changed,
   removed,
   warnings,
+  references,
 }: {
   post: Post
   close: () => void
@@ -26,6 +28,7 @@ export function PostDetails({
   changed: (post: Post) => void
   removed: () => void
   warnings?: string[]
+  references?: KnowledgePassage[]
 }) {
   const [busy, setBusy] = useState(false)
   const deleting = useRef(false)
@@ -78,7 +81,7 @@ export function PostDetails({
   return (
     <Modal title={post.title} close={close} busy={busy}>
       <div className="post-details">
-        {warnings && <AiReviewNotice warnings={warnings} />}
+        {warnings && <AiReviewNotice warnings={warnings} references={references} />}
         {error != null && <ErrorNotice error={error} />}
         <div className="detail-meta">
           <PlatformLabel platform={post.platform} />
@@ -128,6 +131,9 @@ export function PostDetails({
             <small>Your timezone: {timezone}.</small>
           </label>
         )}
+        {import.meta.env.DEV && post.platform === 2 && (
+          <LinkedInPublication post={post} busy={busy} setBusy={setBusy} changed={changed} />
+        )}
         {confirmDelete && (
           <div className="delete-confirm" role="alert">
             <strong>Delete this post?</strong>
@@ -145,6 +151,9 @@ export function PostDetails({
         )}
       </div>
       <footer className="modal-footer detail-actions">
+        <button type="button" className="button" disabled={busy} onClick={close}>
+          OK
+        </button>
         {deletable && (
           <button
             className="text-button danger-text"

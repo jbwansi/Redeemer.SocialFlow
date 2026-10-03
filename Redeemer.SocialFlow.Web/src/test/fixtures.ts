@@ -1,4 +1,16 @@
-import type { Post } from '../api/posts'
+import type { Post, GeneratedDraftSuccess } from '../api/posts'
+export function generatedDraft(
+  overrides: Partial<GeneratedDraftSuccess> = {},
+): GeneratedDraftSuccess {
+  return {
+    outcome: 1,
+    postId: 'post-1',
+    draft: { post: post(), warnings: [] },
+    metadata: { provider: 'TestProvider', model: 'test-model' },
+    referencePassages: [],
+    ...overrides,
+  }
+}
 export function post(overrides: Partial<Post> = {}): Post {
   return {
     id: 'post-1',

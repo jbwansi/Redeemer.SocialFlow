@@ -4,6 +4,8 @@ React + TypeScript + Vite frontend for Redeemer Holding. Primary brand color: `#
 
 ## Run locally
 
+For the Development-only LinkedIn workflow, follow the [single local test procedure](../docs/linkedin-v1-local.md). It uses HTTPS port 65474 and keeps the worker disabled by default.
+
 The frontend is included under `src` in `Redeemer.SocialFlow.slnx` as a Visual Studio
 JavaScript/TypeScript project (`Redeemer.SocialFlow.Web.esproj`). Reload the solution
 if it was already open. Visual Studio requires the JavaScript/TypeScript project
@@ -20,7 +22,7 @@ From the repository root, initialize the database and start the existing API:
 
 ```powershell
 dotnet ef database update --project Redeemer.SocialFlow.Infrastructure --startup-project Redeemer.SocialFlow.Api
-dotnet run --project Redeemer.SocialFlow.Api --no-launch-profile -- --urls http://localhost:5080 --environment Development
+dotnet run --project Redeemer.SocialFlow.Api --launch-profile Redeemer.SocialFlow.Api
 ```
 
 SQLite resolves relative paths against the process working directory. To ensure both
@@ -39,7 +41,7 @@ npm ci
 npm run dev
 ```
 
-Open `http://127.0.0.1:5173`. Vite proxies `/api` to `http://localhost:5080`, so no
+Open `http://127.0.0.1:5173`. Vite proxies `/api` to `https://127.0.0.1:65474`, so no
 backend CORS changes are required. Copy `.env.example` to `.env.local` to override
 `API_PROXY_TARGET`. Restart Vite after changing environment variables.
 
@@ -57,7 +59,7 @@ backend CORS changes are required. Copy `.env.example` to `.env.local` to overri
 - ProblemDetails title/detail, field errors, and reference IDs are displayed in place.
   Failed saves preserve user input. Buttons are disabled during writes.
 - Semantic forms, keyboard-accessible native dialogs, focus restoration, reduced-motion
-  support, and desktop/mobile layouts. No authentication or external publishing.
+  support, and desktop/mobile layouts. External publication is available only through the opt-in local LinkedIn Development workflow.
 
 All displayed dates use the browser's timezone. Calendar grouping uses local scheduled
 dates. Date filters cover entire local creation dates, inclusively; scheduling converts

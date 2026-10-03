@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { postsApi, platforms, type Post, type Platform } from '../api/posts'
+import { postsApi, platforms, type Post, type Platform, type KnowledgePassage } from '../api/posts'
 import { ErrorNotice, Modal } from './shared'
 import { AiReviewNotice } from './GenerateDraft'
 
@@ -8,11 +8,13 @@ export function PostEditor({
   close,
   saved,
   warnings,
+  references,
 }: {
   post?: Post
   close: () => void
   saved: (post: Post) => void
   warnings?: string[]
+  references?: KnowledgePassage[]
 }) {
   const [title, setTitle] = useState(post?.title || '')
   const [content, setContent] = useState(post?.content || '')
@@ -46,7 +48,7 @@ export function PostEditor({
   return (
     <Modal title={post ? 'Edit post' : 'Create a post'} close={close} busy={busy}>
       <form onSubmit={submit} className="editor-form">
-        {warnings && <AiReviewNotice warnings={warnings} />}
+        {warnings && <AiReviewNotice warnings={warnings} references={references} />}
         {error != null && <ErrorNotice error={error} />}
         <fieldset disabled={busy}>
           <label>

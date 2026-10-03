@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Redeemer.SocialFlow.Application.AI;
+using Redeemer.SocialFlow.Application.Knowledge;
 using Redeemer.SocialFlow.Application.SocialPosts;
 using Redeemer.SocialFlow.Domain.Entities;
 using Redeemer.SocialFlow.Domain.Enums;
@@ -70,12 +71,18 @@ public sealed class AiGenerationPersistenceTests
         {
             await context.Database.MigrateAsync();
             await context.Database.ExecuteSqlRawAsync("CREATE TRIGGER FailAudit BEFORE INSERT ON AiGenerations BEGIN SELECT RAISE(ABORT, 'Test failure'); END;");
-            var useCase = new GenerateSocialPostDraft(new Generator(), context);
+            var useCase = new GenerateSocialPostDraft(new Generator(), context, new UnusedGroundedGenerator());
             await Assert.ThrowsAsync<DbUpdateException>(() => useCase.ExecuteAsync(new("S", "O", "A", SocialPlatform.Facebook)));
         }
         await using var read = new SocialFlowDbContext(options);
         Assert.Empty(await read.SocialPosts.ToListAsync());
         Assert.Empty(await read.AiGenerations.ToListAsync());
+    }
+
+    private sealed class UnusedGroundedGenerator : IGenerateGroundedContent
+    {
+        public Task<GroundedContentResult> ExecuteAsync(GenerateContentRequest request, CancellationToken cancellationToken = default)
+            => throw new InvalidOperationException("Editorial generation must not use grounded generation.");
     }
 
     private sealed class Generator : IContentGenerator

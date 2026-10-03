@@ -1662,3 +1662,13 @@ tbody tr:hover {
   padding-left: 20px;
   white-space: pre-wrap;
 }
+.linkedin-panel {
+  margin: 1rem 0;
+  padding: 1rem;
+  border: 1px solid #e5e1dd;
+  border-radius: 12px;
+  background: #faf9f7;
+  overflow-wrap: anywhere;
+}
+.linkedin-panel .button { margin: .35rem .5rem .35rem 0; }
+.linkedin-panel small { display: block; margin: .5rem 0; }

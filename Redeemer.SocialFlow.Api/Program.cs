@@ -4,8 +4,17 @@ using Redeemer.SocialFlow.Application;
 using Redeemer.SocialFlow.Api.Errors;
 using Redeemer.SocialFlow.Api.Controllers;
 using Scalar.AspNetCore;
+using Redeemer.SocialFlow.Api.Development;
+using Redeemer.SocialFlow.Infrastructure.Persistence;
+using Redeemer.SocialFlow.Api.Development.LinkedIn;
 
 var builder = WebApplication.CreateBuilder(args);
+if (builder.Environment.IsDevelopment())
+{
+    builder.Services.AddLocalLinkedIn(builder.Configuration, builder.Environment);
+    // Hosting/MVC informational and trace logs may include OAuth callback query values.
+    builder.Logging.AddFilter("Microsoft.AspNetCore", LogLevel.Warning);
+}
 
 var connectionString = builder.Configuration.GetConnectionString("SocialFlow")
     ?? throw new InvalidOperationException("Connection string 'SocialFlow' is required.");
@@ -26,7 +35,16 @@ builder.Services.AddProblemDetails(options => options.CustomizeProblemDetails = 
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.AddOpenApi();
 
-var app = builder.Build();
+await using var app = builder.Build();
+if (ManualKnowledgeSeed.IsRequested(args))
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    await ManualKnowledgeSeed.RunAsync(args, app.Environment,
+        scope.ServiceProvider.GetRequiredService<SocialFlowDbContext>(), TimeProvider.System,
+        app.Lifetime.ApplicationStopping);
+    Console.WriteLine("Knowledge test seed completed (existing document left unchanged).");
+    return;
+}
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 app.MapControllers();

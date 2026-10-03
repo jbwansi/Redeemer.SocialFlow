@@ -142,20 +142,20 @@ public class SocialPost
 		UpdatedAt = now;
 	}
 
-	public void MarkAsPublished()
+	public void MarkAsPublished(TimeProvider? timeProvider = null)
 	{
 		EnsureNotDeleted();
 		if (Status != SocialPostStatus.Scheduled)
 			throw new DomainException(
 				"La publication doit être programmée.");
 
-		var now = _timeProvider.GetUtcNow();
+		var now = (timeProvider ?? _timeProvider).GetUtcNow();
 		PublishedAt = now;
 		Status = SocialPostStatus.Published;
 		UpdatedAt = now;
 	}
 
-	public void MarkAsFailed()
+	public void MarkAsFailed(TimeProvider? timeProvider = null)
 	{
 		EnsureNotDeleted();
 		if (Status != SocialPostStatus.Scheduled)
@@ -163,7 +163,7 @@ public class SocialPost
 				"Seule une publication programmée peut échouer.");
 
 		Status = SocialPostStatus.Failed;
-		UpdatedAt = _timeProvider.GetUtcNow();
+		UpdatedAt = (timeProvider ?? _timeProvider).GetUtcNow();
 	}
 
 	public void Cancel()

@@ -26,7 +26,7 @@ public sealed class PostsApiTests : IAsyncLifetime
     public async Task InitializeAsync()
     {
         _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder => builder
-            .UseEnvironment("Production")
+            .UseSetting("LinkedIn:WorkerEnabled", "false").UseEnvironment("Production")
             .UseSetting("ConnectionStrings:SocialFlow", $"Data Source={_path};Pooling=False"));
         await using var scope = _factory.Services.CreateAsyncScope();
         await scope.ServiceProvider.GetRequiredService<SocialFlowDbContext>().Database.MigrateAsync();
@@ -209,7 +209,7 @@ public sealed class PostsApiTests : IAsyncLifetime
     [InlineData("Production")]
     public async Task UnexpectedFailure_ReturnsGeneric500Problem(string environment)
     {
-        await using var failingFactory = _factory.WithWebHostBuilder(builder => builder.UseEnvironment(environment)
+        await using var failingFactory = _factory.WithWebHostBuilder(builder => builder.UseSetting("LinkedIn:WorkerEnabled", "false").UseEnvironment(environment)
             .ConfigureServices(services => services.Replace(ServiceDescriptor.Scoped<ISocialFlowDbContext, FailingContext>())));
         using var client = failingFactory.CreateClient();
         var problem = await AssertProblem(await client.GetAsync("/api/posts"), HttpStatusCode.InternalServerError);
@@ -231,11 +231,12 @@ public sealed class PostsApiTests : IAsyncLifetime
     {
         await AssertProblem(await _client.GetAsync("/openapi/v1.json"), HttpStatusCode.NotFound);
         await AssertProblem(await _client.GetAsync("/scalar/v1"), HttpStatusCode.NotFound);
-        await using var development = _factory.WithWebHostBuilder(builder => builder.UseEnvironment("Development"));
+        await using var development = _factory.WithWebHostBuilder(builder => builder.UseSetting("LinkedIn:WorkerEnabled", "false").UseEnvironment("Development"));
         using var client = development.CreateClient();
         using var document = JsonDocument.Parse(await client.GetStringAsync("/openapi/v1.json"));
         var paths = document.RootElement.GetProperty("paths");
-        Assert.Equal(13, paths.EnumerateObject().Sum(path => path.Value.EnumerateObject().Count()));
+        Assert.Equal(26, paths.EnumerateObject().Sum(path => path.Value.EnumerateObject().Count()));
+        Assert.True(paths.GetProperty("/api/dev/ai/generate-grounded").GetProperty("post").GetProperty("responses").TryGetProperty("200", out _));
         Assert.True(paths.GetProperty("/api/posts/trash").GetProperty("get").GetProperty("responses").TryGetProperty("200", out _));
         Assert.True(paths.GetProperty("/api/posts/generate-draft").GetProperty("post").GetProperty("responses").TryGetProperty("201", out _));
         Assert.True(paths.GetProperty("/api/posts").GetProperty("post").GetProperty("responses").TryGetProperty("201", out _));

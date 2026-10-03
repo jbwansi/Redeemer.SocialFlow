@@ -10,6 +10,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Redeemer.SocialFlow.Application.AI;
+using Redeemer.SocialFlow.Api.Contracts;
+using Redeemer.SocialFlow.Application.Knowledge;
 using Redeemer.SocialFlow.Application.SocialPosts;
 using Redeemer.SocialFlow.Domain.Enums;
 using Redeemer.SocialFlow.Infrastructure.Persistence;
@@ -21,9 +23,10 @@ public sealed class GenerateDraftApiTests : IAsyncLifetime
 {
     private readonly string _path = Path.Combine(Path.GetTempPath(), $"socialflow-draft-api-{Guid.NewGuid():N}.db");
     private readonly Generator _generator = new();
+    private readonly Search _search = new();
     private readonly Logs _logs = new();
     private WebApplicationFactory<Program> _factory = null!;
-    private static readonly GenerateContentRequest Request = new("Subject", "Objective", "Audience", SocialPlatform.LinkedIn);
+    private static readonly GenerateDraftRequest Request = new("Subject", "Objective", "Audience", SocialPlatform.LinkedIn, SocialPostGenerationMode.Editorial);
 
     [Fact]
     public async Task Trash_ReturnsOnlyDeletedPostsWithDates_WithoutChangingAuditsOrNormalQueries()
@@ -34,7 +37,7 @@ public sealed class GenerateDraftApiTests : IAsyncLifetime
         {
             using var response = await client.PostAsJsonAsync("/api/posts/generate-draft", Request);
             Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-            generated.Add((await response.Content.ReadFromJsonAsync<GenerateSocialPostDraftResult>())!);
+            generated.Add((await response.Content.ReadFromJsonAsync<GenerateSocialPostDraftExecutionResult>())!.Draft!);
         }
         Assert.Empty((await client.GetFromJsonAsync<TrashedSocialPostDto[]>("/api/posts/trash"))!);
         // Include both currently deletable statuses.
@@ -91,10 +94,14 @@ public sealed class GenerateDraftApiTests : IAsyncLifetime
     public async Task InitializeAsync()
     {
         _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder => builder
-            .UseEnvironment("Production")
+            .UseSetting("LinkedIn:WorkerEnabled", "false").UseEnvironment("Production")
             .UseSetting("ConnectionStrings:SocialFlow", $"Data Source={_path};Pooling=False")
             .ConfigureLogging(logging => logging.AddProvider(_logs))
-            .ConfigureServices(services => services.Replace(ServiceDescriptor.Singleton<IContentGenerator>(_generator))));
+            .ConfigureServices(services =>
+            {
+                services.Replace(ServiceDescriptor.Singleton<IContentGenerator>(_generator));
+                services.Replace(ServiceDescriptor.Singleton<IKnowledgePassageSearch>(_search));
+            }));
         await using var scope = _factory.Services.CreateAsyncScope();
         await scope.ServiceProvider.GetRequiredService<SocialFlowDbContext>().Database.MigrateAsync();
     }
@@ -105,8 +112,8 @@ public sealed class GenerateDraftApiTests : IAsyncLifetime
         using var client = _factory.CreateClient();
         using var response = await client.PostAsJsonAsync("/api/posts/generate-draft", Request);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        var result = (await response.Content.ReadFromJsonAsync<GenerateSocialPostDraftResult>())!;
-        Assert.Equal(Request, _generator.Received);
+        var result = (await response.Content.ReadFromJsonAsync<GenerateSocialPostDraftExecutionResult>())!.Draft!;
+        Assert.Equal(new GenerateContentRequest(Request.Subject, Request.Objective, Request.Audience, Request.Platform!.Value), _generator.Received);
         Assert.Equal(1, _generator.Calls);
         Assert.Equal(_generator.Result.Warnings, result.Warnings);
         Assert.EndsWith($"/api/posts/{result.Post.Id}", response.Headers.Location!.ToString());
@@ -134,7 +141,7 @@ public sealed class GenerateDraftApiTests : IAsyncLifetime
     {
         using var client = _factory.CreateClient();
         using var generated = await client.PostAsJsonAsync("/api/posts/generate-draft", Request);
-        var result = (await generated.Content.ReadFromJsonAsync<GenerateSocialPostDraftResult>())!;
+        var result = (await generated.Content.ReadFromJsonAsync<GenerateSocialPostDraftExecutionResult>())!.Draft!;
         var url = $"/api/posts/{result.Post.Id}";
         using var deleted = await client.DeleteAsync(url);
         Assert.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
@@ -174,6 +181,13 @@ public sealed class GenerateDraftApiTests : IAsyncLifetime
     public async Task InvalidRequest_ReturnsProblemWithoutGeneratingOrSaving(string json)
     {
         using var client = _factory.CreateClient();
+        // Keep original field-validation coverage independent of the new mandatory mode.
+        if (json.StartsWith("{" ) && json.EndsWith("}"))
+        {
+            var body = System.Text.Json.Nodes.JsonNode.Parse(json)!;
+            body["mode"] = 1;
+            json = body.ToJsonString();
+        }
         using var content = new StringContent(json, Encoding.UTF8, "application/json");
         using var response = await client.PostAsync("/api/posts/generate-draft", content);
         await AssertProblem(response, HttpStatusCode.BadRequest);
@@ -190,7 +204,7 @@ public sealed class GenerateDraftApiTests : IAsyncLifetime
         _generator.Failure = new InvalidOperationException("Authorization: Bearer secret-api-key sensitive-generated-text");
         await using var factory = _factory.WithWebHostBuilder(builder =>
         {
-            builder.UseEnvironment(environment);
+            builder.UseSetting("LinkedIn:WorkerEnabled", "false").UseEnvironment(environment);
             if (resolutionFails)
                 builder.ConfigureServices(services => services.Replace(ServiceDescriptor.Scoped<IGenerateSocialPostDraft>(
                     _ => throw new InvalidOperationException("secret-api-key"))));
@@ -231,15 +245,126 @@ public sealed class GenerateDraftApiTests : IAsyncLifetime
         foreach (var suffix in new[] { "", "-wal", "-shm" }) File.Delete(_path + suffix);
     }
 
+    [Theory]
+    [InlineData(SocialPostGenerationMode.Editorial)]
+    [InlineData(SocialPostGenerationMode.Grounded)]
+    public async Task Modes_ReturnExecutionResultAndGettableDraft_IgnoreClientReferences(SocialPostGenerationMode mode)
+    {
+        using var client = _factory.CreateClient();
+        using var response = await client.PostAsJsonAsync("/api/posts/generate-draft", new
+        {
+            Request.Subject, Request.Objective, Request.Audience, Request.Platform, mode,
+            referencePassages = new[] { _search.Passage with { Content = "CLIENT-INJECTED", DocumentTitle = "Invented source" } }
+        });
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var result = (await response.Content.ReadFromJsonAsync<GenerateSocialPostDraftExecutionResult>())!;
+        Assert.Equal(SocialPostDraftOutcome.Created, result.Outcome);
+        Assert.NotNull(result.Draft);
+        Assert.Equal(result.PostId, result.Draft.Post.Id);
+        Assert.Equal(_generator.Result.Warnings, result.Draft.Warnings);
+        Assert.Equal(new ContentGenerationMetadata("TestProvider", "test-model"), result.Metadata);
+        Assert.Equal(SocialPostStatus.Draft, result.Draft.Post.Status);
+        Assert.EndsWith($"/api/posts/{result.PostId}", response.Headers.Location!.ToString());
+        Assert.Equal(result.Draft.Post, await client.GetFromJsonAsync<SocialPostDto>(response.Headers.Location));
+        Assert.True(_generator.Token.CanBeCanceled);
+        if (mode == SocialPostGenerationMode.Editorial)
+        {
+            Assert.Empty(_generator.Received!.ReferencePassages);
+            Assert.Empty(result.ReferencePassages);
+            Assert.Equal(0, _search.Calls);
+        }
+        else
+        {
+            Assert.Equal(_search.Passage, Assert.Single(_generator.Received!.ReferencePassages));
+            Assert.Equal(_search.Passage, Assert.Single(result.ReferencePassages));
+            Assert.Equal(1, _search.Calls);
+        }
+        Assert.DoesNotContain("CLIENT-INJECTED", await response.Content.ReadAsStringAsync());
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SocialFlowDbContext>();
+        Assert.Equal(result.PostId, Assert.Single(await db.SocialPosts.ToListAsync()).Id);
+        Assert.Single(await db.AiGenerations.ToListAsync());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Grounded_WithoutUsableContextReturns200WithoutGenerationOrPost(bool oversized)
+    {
+        _search.Empty = !oversized;
+        _search.Oversized = oversized;
+        using var client = _factory.CreateClient();
+        using var response = await client.PostAsJsonAsync("/api/posts/generate-draft", Request with { Mode = SocialPostGenerationMode.Grounded });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Null(response.Headers.Location);
+        var result = (await response.Content.ReadFromJsonAsync<GenerateSocialPostDraftExecutionResult>())!;
+        Assert.Equal(oversized ? SocialPostDraftOutcome.ContextLimitExceeded : SocialPostDraftOutcome.NoRelevantPassages, result.Outcome);
+        Assert.Null(result.PostId);
+        Assert.Null(result.Draft);
+        Assert.Null(result.Metadata);
+        Assert.Empty(result.ReferencePassages);
+        Assert.Equal(0, _generator.Calls);
+        await AssertNoPosts();
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("null")]
+    [InlineData("0")]
+    [InlineData("999")]
+    [InlineData("\"Editorial\"")]
+    public async Task ModeMustBePresentAndValidNumericEnum(string? modeJson)
+    {
+        var body = System.Text.Json.JsonSerializer.SerializeToNode(Request, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web))!;
+        body.AsObject().Remove("mode");
+        if (modeJson is not null) body["mode"] = System.Text.Json.Nodes.JsonNode.Parse(modeJson);
+        using var client = _factory.CreateClient();
+        using var response = await client.PostAsJsonAsync("/api/posts/generate-draft", body);
+        await AssertProblem(response, HttpStatusCode.BadRequest);
+        Assert.Equal(0, _generator.Calls);
+        Assert.Equal(0, _search.Calls);
+        await AssertNoPosts();
+    }
+
+    [Fact]
+    public async Task GroundedFailure_ReturnsSafeProblemWithoutPost()
+    {
+        _generator.Failure = new InvalidOperationException("secret-api-key");
+        using var client = _factory.CreateClient();
+        using var response = await client.PostAsJsonAsync("/api/posts/generate-draft", Request with { Mode = SocialPostGenerationMode.Grounded });
+        await AssertProblem(response, HttpStatusCode.InternalServerError);
+        Assert.DoesNotContain("secret-api-key", await response.Content.ReadAsStringAsync());
+        Assert.DoesNotContain(_logs.Messages, message => message.Contains("secret-api-key"));
+        Assert.Equal(1, _generator.Calls);
+        await AssertNoPosts();
+    }
+
+    private sealed class Search : IKnowledgePassageSearch
+    {
+        public int Calls { get; private set; }
+        public bool Empty { get; set; }
+        public bool Oversized { get; set; }
+        public KnowledgePassage Passage { get; } = new(Guid.NewGuid(), Guid.NewGuid(), "Server source", 1,
+            SourceType.Other, AuthorityLevel.Low, "fr", "Server reference", 0, null, "Test");
+        public Task<IReadOnlyList<KnowledgePassage>> SearchForGenerationAsync(SearchKnowledgePassagesRequest request, CancellationToken cancellationToken = default)
+        {
+            Calls++;
+            return Task.FromResult<IReadOnlyList<KnowledgePassage>>(Empty ? [] :
+                new[] { Oversized ? Passage with { Content = new string('x', 12001) } : Passage });
+        }
+    }
+
     private sealed class Generator : IContentGenerator
     {
         public int Calls { get; private set; }
+        public CancellationToken Token { get; private set; }
         public GenerateContentRequest? Received { get; private set; }
         public Exception? Failure { get; set; }
         public GeneratedContent Result { get; } = new("Title", "Body", "Act", "Visual", [" Review ", "", " Review "]);
         public Task<ContentGenerationResult> GenerateAsync(GenerateContentRequest request, CancellationToken cancellationToken = default)
         {
             Calls++;
+            Token = cancellationToken;
             Received = request;
             return Failure is null ? Task.FromResult(new ContentGenerationResult(Result, new ContentGenerationMetadata("TestProvider", "test-model"))) : Task.FromException<ContentGenerationResult>(Failure);
         }
