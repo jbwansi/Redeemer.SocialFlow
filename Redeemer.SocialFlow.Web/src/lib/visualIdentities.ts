@@ -33,10 +33,13 @@ export function cleanIdentity(value: unknown): VisualIdentity | null {
     v.colors.length < 1 ||
     v.colors.length > 8 ||
     !v.colors.every((c) => typeof c === 'string' && validColor(c)) ||
+    (v.instructions !== undefined &&
+      (typeof v.instructions !== 'string' || v.instructions.length > 4000)) ||
     (v.slogan !== undefined && (typeof v.slogan !== 'string' || v.slogan.length > 300))
   )
     return null
   return {
+    ...(typeof v.instructions === 'string' ? { instructions: v.instructions.trim() } : {}),
     identityId: v.identityId.trim(),
     name: v.name.trim(),
     style: v.style.trim(),

@@ -22,6 +22,8 @@ public sealed class PostVisual
     public bool IsDeleted { get; private set; }
     public DateTimeOffset? DeletedAt { get; private set; }
     public DateTimeOffset? PurgedAt { get; private set; }
+    public Guid? SourceIdentityId { get; private set; }
+    public void SetSourceIdentity(Guid id) { if (Origin != VisualOrigin.Generated || IsReady || SourceIdentityId.HasValue) throw new DomainException("Invalid source identity."); SourceIdentityId = id; }
     public string? GenerationMetadataJson { get; private set; }
 
     public static PostVisual Create(SocialPost post, VisualOrigin origin, string contentType,

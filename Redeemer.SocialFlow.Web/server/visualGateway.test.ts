@@ -216,3 +216,20 @@ describe('local server gateway', () => {
     expect(request).toHaveBeenCalledTimes(1)
   })
 })
+
+it('strictly allowlists identity and private logo routes', () => {
+  const root = '/visual-identities'
+  for (const method of ['GET', 'POST']) expect(allowedRoute(root, method)).toBe(true)
+  for (const method of ['PUT', 'DELETE']) expect(allowedRoute(root + '/' + id, method)).toBe(true)
+  expect(allowedRoute(root + '/' + id + '/logo', 'POST')).toBe(true)
+  expect(allowedRoute(root + '/' + id + '/default', 'POST')).toBe(true)
+  expect(allowedRoute(root + '/' + id + '/logos/' + id, 'GET')).toBe(true)
+  for (const path of [
+    root + '?secret=x',
+    root + '/../files/a',
+    root + '/' + id + '/logo?x=y',
+    root + '/' + id + '/logos/not-a-guid',
+  ])
+    expect(allowedRoute(path, 'GET')).toBe(false)
+  expect(allowedRoute(root + '/' + id + '/logos/' + id, 'DELETE')).toBe(false)
+})

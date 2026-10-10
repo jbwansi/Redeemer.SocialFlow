@@ -6,7 +6,7 @@ using Redeemer.SocialFlow.Application.Visuals;
 namespace Redeemer.SocialFlow.Api.Controllers;
 
 public sealed record GenerateVisualApiRequest(string IdentityId, string Name, string Style, string[] Colors,
-    string? Slogan = null, string? VisualBrief = null);
+    string? Slogan = null, string? VisualBrief = null, string? Instructions = null, Guid? LibraryId = null, long? Revision = null);
 
 [ApiController]
 [Route("api/posts/{postId:guid}/visuals")]
@@ -30,7 +30,13 @@ public sealed class VisualsController(PostVisualService visuals) : ControllerBas
     public async Task<ActionResult<VisualDto>> Generate(Guid postId, GenerateVisualApiRequest? request, CancellationToken token)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var identity = new VisualIdentity(request.IdentityId, request.Name, request.Style, request.Colors, request.Slogan);
+        var identity = new VisualIdentity(request.IdentityId, request.Name, request.Style, request.Colors, request.Slogan, request.Instructions);
+        if (request.LibraryId is Guid libraryId)
+        {
+            if (request.Revision is not long revision) throw new ArgumentException("Identity revision is required.");
+            identity = await HttpContext.RequestServices.GetRequiredService<VisualIdentityLibrary>()
+                .ResolveAsync(libraryId, revision, identity, token);
+        }
         var generator = HttpContext.RequestServices.GetRequiredService<IVisualGenerator>();
         var visual = await visuals.GenerateAsync(postId, identity, request.VisualBrief, generator, token);
         return CreatedAtAction(nameof(Get), new { postId, visualId = visual.Id }, visual);

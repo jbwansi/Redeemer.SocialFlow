@@ -37,6 +37,13 @@ public sealed class SqlitePostVisualStore(DbContextOptions<SocialFlowDbContext> 
         var entity = PostVisual.Create(post, visual.Origin, visual.Image.ContentType, visual.Image.Width,
             visual.Image.Height, visual.ByteLength, visual.Sha256,
             visual.Generation is null ? null : JsonSerializer.Serialize(visual.Generation), Clock.GetUtcNow());
+        if (visual.Generation?.EffectiveIdentity?.LibraryId is Guid sourceId)
+        {
+            // Serialize against deletion/deactivation. The immutable effective settings stay in metadata.
+            if (!await db.VisualIdentities.AnyAsync(x => x.Id == sourceId && !x.IsDeleted && x.IsActive, token))
+                throw new DomainException("Source identity is unavailable.");
+            entity.SetSourceIdentity(sourceId);
+        }
         db.PostVisuals.Add(entity);
         await db.SaveChangesAsync(token);
         await tx.CommitAsync(token);

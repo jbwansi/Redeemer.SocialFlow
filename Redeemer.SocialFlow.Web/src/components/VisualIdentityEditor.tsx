@@ -14,7 +14,9 @@ import { ErrorNotice } from './shared'
 export function VisualIdentityEditor({
   value,
   onChange,
+  localLibrary = true,
 }: {
+  localLibrary?: boolean
   value: VisualIdentity
   onChange: (identity: VisualIdentity) => void
 }) {
@@ -38,31 +40,35 @@ export function VisualIdentityEditor({
   }
   return (
     <>
-      <label>
-        Identités enregistrées sur ce navigateur
-        <select
-          value=""
-          onChange={(e) => {
-            const identity = stored.entries.find((v) => v.identityId === e.target.value)
-            if (identity) change({ ...identity, colors: [...identity.colors] })
-          }}
-        >
-          <option value="">Choisir une identité…</option>
-          {stored.entries.map((v) => (
-            <option key={v.identityId} value={v.identityId}>
-              {v.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <div className="visual-actions">
-        <button type="button" className="button" onClick={() => change(redeemerIdentity())}>
-          Utiliser le modèle Redeemer Holding
-        </button>
-        <button type="button" className="button" onClick={() => change(emptyIdentity())}>
-          Nouvelle identité
-        </button>
-      </div>
+      {localLibrary && (
+        <>
+          <label>
+            Identités enregistrées sur ce navigateur
+            <select
+              value=""
+              onChange={(e) => {
+                const identity = stored.entries.find((v) => v.identityId === e.target.value)
+                if (identity) change({ ...identity, colors: [...identity.colors] })
+              }}
+            >
+              <option value="">Choisir une identité…</option>
+              {stored.entries.map((v) => (
+                <option key={v.identityId} value={v.identityId}>
+                  {v.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="visual-actions">
+            <button type="button" className="button" onClick={() => change(redeemerIdentity())}>
+              Utiliser le modèle Redeemer Holding
+            </button>
+            <button type="button" className="button" onClick={() => change(emptyIdentity())}>
+              Nouvelle identité
+            </button>
+          </div>
+        </>
+      )}
       <label>
         Identifiant de l’identité
         <input
@@ -85,6 +91,14 @@ export function VisualIdentityEditor({
           value={value.style}
           maxLength={1000}
           onChange={(e) => change({ ...value, style: e.target.value })}
+        />
+      </label>
+      <label>
+        Instructions visuelles (facultatif)
+        <textarea
+          value={value.instructions || ''}
+          maxLength={4000}
+          onChange={(e) => change({ ...value, instructions: e.target.value })}
         />
       </label>
       <div className="identity-palette" role="group" aria-label="Palette de couleurs">
@@ -150,45 +164,49 @@ export function VisualIdentityEditor({
           onChange={(e) => change({ ...value, slogan: e.target.value })}
         />
       </label>
-      <button
-        type="button"
-        className="button"
-        onClick={() => {
-          if (!cleanIdentity(value)) {
-            setError(
-              new ApiError({
-                title: 'Identité incomplète',
-                detail:
-                  'Renseignez un identifiant, un nom, un style et 1 à 8 couleurs valides au format #RRGGBB.',
-              }),
-            )
-            return
-          }
-          try {
-            setStored({ entries: saveIdentity(value), failed: false })
-            setError(undefined)
-            setMessage('Identité enregistrée sur ce navigateur.')
-          } catch {
-            setError(
-              new ApiError({
-                title: 'Sauvegarde locale indisponible',
-                detail:
-                  'Le stockage est bloqué, plein ou contient des données invalides. Vous pouvez continuer sans sauvegarder.',
-              }),
-            )
-          }
-        }}
-      >
-        Enregistrer l’identité localement
-      </button>
-      <p className="field-note">
-        Sauvegarde sur cet appareil et cette adresse uniquement. Aucun secret ni contenu de
-        publication n’est enregistré. Un même identifiant remplace sa version sauvegardée.
-      </p>
-      {stored.failed && (
-        <p role="status">
-          Les identités locales ne peuvent pas être chargées. Le formulaire reste utilisable.
-        </p>
+      {localLibrary && (
+        <>
+          <button
+            type="button"
+            className="button"
+            onClick={() => {
+              if (!cleanIdentity(value)) {
+                setError(
+                  new ApiError({
+                    title: 'Identité incomplète',
+                    detail:
+                      'Renseignez un identifiant, un nom, un style et 1 à 8 couleurs valides au format #RRGGBB.',
+                  }),
+                )
+                return
+              }
+              try {
+                setStored({ entries: saveIdentity(value), failed: false })
+                setError(undefined)
+                setMessage('Identité enregistrée sur ce navigateur.')
+              } catch {
+                setError(
+                  new ApiError({
+                    title: 'Sauvegarde locale indisponible',
+                    detail:
+                      'Le stockage est bloqué, plein ou contient des données invalides. Vous pouvez continuer sans sauvegarder.',
+                  }),
+                )
+              }
+            }}
+          >
+            Enregistrer l’identité localement
+          </button>
+          <p className="field-note">
+            Sauvegarde sur cet appareil et cette adresse uniquement. Aucun secret ni contenu de
+            publication n’est enregistré. Un même identifiant remplace sa version sauvegardée.
+          </p>
+          {stored.failed && (
+            <p role="status">
+              Les identités locales ne peuvent pas être chargées. Le formulaire reste utilisable.
+            </p>
+          )}
+        </>
       )}
       {error != null && <ErrorNotice error={error} />}
       {message && <p role="status">{message}</p>}

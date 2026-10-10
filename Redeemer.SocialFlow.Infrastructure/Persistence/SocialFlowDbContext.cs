@@ -7,6 +7,8 @@ namespace Redeemer.SocialFlow.Infrastructure.Persistence;
 public sealed class SocialFlowDbContext(DbContextOptions<SocialFlowDbContext> options)
     : DbContext(options), ISocialFlowDbContext, IKnowledgeDbContext
 {
+    public DbSet<StoredVisualIdentity> VisualIdentities => Set<StoredVisualIdentity>();
+    public DbSet<IdentityLogo> IdentityLogos => Set<IdentityLogo>();
     public DbSet<PostVisual> PostVisuals => Set<PostVisual>();
     public DbSet<SocialPost> SocialPosts => Set<SocialPost>();
     public DbSet<AiGeneration> AiGenerations => Set<AiGeneration>();

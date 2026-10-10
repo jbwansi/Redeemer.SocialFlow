@@ -62,6 +62,52 @@ namespace Redeemer.SocialFlow.Infrastructure.Persistence.Migrations
                     b.ToTable("AiGenerations", (string)null);
                 });
 
+            modelBuilder.Entity("Redeemer.SocialFlow.Domain.Entities.IdentityLogo", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("ByteLength")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Height")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("IdentityId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsReady")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Sha256")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Width")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IdentityId");
+
+                    b.HasIndex("StorageKey")
+                        .IsUnique();
+
+                    b.ToTable("IdentityLogos");
+                });
+
             modelBuilder.Entity("Redeemer.SocialFlow.Domain.Entities.KnowledgeChunk", b =>
                 {
                     b.Property<Guid>("Id")
@@ -188,6 +234,9 @@ namespace Redeemer.SocialFlow.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("SocialPostId")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("SourceIdentityId")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("StorageKey")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -199,6 +248,8 @@ namespace Redeemer.SocialFlow.Infrastructure.Persistence.Migrations
                         .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("SourceIdentityId");
 
                     b.HasIndex("StorageKey")
                         .IsUnique();
@@ -315,11 +366,96 @@ namespace Redeemer.SocialFlow.Infrastructure.Persistence.Migrations
                     b.ToTable("SocialPosts", (string)null);
                 });
 
+            modelBuilder.Entity("Redeemer.SocialFlow.Domain.Entities.StoredVisualIdentity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ColorsJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("IdentityId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Instructions")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("LogoId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Slogan")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Style")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IdentityId")
+                        .IsUnique();
+
+                    b.HasIndex("IsDefault")
+                        .IsUnique()
+                        .HasFilter("\"IsDefault\" = 1");
+
+                    b.HasIndex("LogoId");
+
+                    b.ToTable("VisualIdentities");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("8f116275-3b02-442f-a930-719e33b10601"),
+                            ColorsJson = "[\"#DA2E29\",\"#D4AF37\",\"#000000\",\"#FFFFFF\"]",
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 10, 10, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IdentityId = "RH",
+                            IsActive = true,
+                            IsDefault = true,
+                            IsDeleted = false,
+                            Name = "Redeemer Holding",
+                            Revision = 1L,
+                            Slogan = "Transformer par les valeurs",
+                            Style = "professionnel, humain, moderne et épuré"
+                        });
+                });
+
             modelBuilder.Entity("Redeemer.SocialFlow.Domain.Entities.AiGeneration", b =>
                 {
                     b.HasOne("Redeemer.SocialFlow.Domain.Entities.SocialPost", null)
                         .WithMany()
                         .HasForeignKey("SocialPostId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Redeemer.SocialFlow.Domain.Entities.IdentityLogo", b =>
+                {
+                    b.HasOne("Redeemer.SocialFlow.Domain.Entities.StoredVisualIdentity", null)
+                        .WithMany()
+                        .HasForeignKey("IdentityId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
@@ -340,6 +476,11 @@ namespace Redeemer.SocialFlow.Infrastructure.Persistence.Migrations
                         .HasForeignKey("SocialPostId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("Redeemer.SocialFlow.Domain.Entities.StoredVisualIdentity", null)
+                        .WithMany()
+                        .HasForeignKey("SourceIdentityId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("Redeemer.SocialFlow.Domain.Entities.PublicationOperation", b =>
@@ -357,6 +498,14 @@ namespace Redeemer.SocialFlow.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("Id", "SelectedVisualId")
                         .HasPrincipalKey("SocialPostId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Redeemer.SocialFlow.Domain.Entities.StoredVisualIdentity", b =>
+                {
+                    b.HasOne("Redeemer.SocialFlow.Domain.Entities.IdentityLogo", null)
+                        .WithMany()
+                        .HasForeignKey("LogoId")
                         .OnDelete(DeleteBehavior.Restrict);
                 });
 #pragma warning restore 612, 618

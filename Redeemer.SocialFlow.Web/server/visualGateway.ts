@@ -9,6 +9,15 @@ const route = new RegExp(
   '^/posts/(' + guid + ')/visuals(?:/(upload|generate|' + guid + ')(/select)?)?$',
 )
 export function allowedRoute(path: string, method: string): boolean {
+  const identity = new RegExp(
+    '^/visual-identities(?:/(' + guid + ')(?:/(default|logo)|/logos/(' + guid + '))?)?$',
+  ).exec(path)
+  if (identity) {
+    if (!identity[1]) return method === 'GET' || method === 'POST'
+    if (identity[3]) return method === 'GET'
+    if (identity[2]) return method === 'POST'
+    return method === 'PUT' || method === 'DELETE'
+  }
   const match = route.exec(path)
   if (!match) return false
   const tail = match[2]
@@ -62,20 +71,22 @@ export function visualGateway(enabled: boolean, secret: string | undefined): Plu
           return
         }
         if (!allowedRoute(path, req.method || '')) return reply(res, 404, 'Visual route not found')
-        const maximum = path.endsWith('/generate') ? 64 * 1024 : 21 * 1024 * 1024
+        const maximum =
+          path.endsWith('/upload') || path.endsWith('/logo') ? 21 * 1024 * 1024 : 64 * 1024
         const length = req.headers['content-length']
         if (length && (!/^\d+$/.test(length) || Number(length) > maximum))
           return reply(res, 413, 'Image or request is too large')
         const contentType = req.headers['content-type'] || ''
         if (
           req.method === 'POST' &&
-          path.endsWith('/upload') &&
+          (path.endsWith('/upload') || path.endsWith('/logo')) &&
           !contentType.startsWith('multipart/form-data;')
         )
           return reply(res, 415, 'A PNG or JPEG upload is required')
         if (
-          req.method === 'POST' &&
-          path.endsWith('/generate') &&
+          (req.method === 'POST' || req.method === 'PUT' || req.method === 'DELETE') &&
+          (path.endsWith('/generate') ||
+            (path.startsWith('/visual-identities') && !path.endsWith('/logo'))) &&
           !contentType.startsWith('application/json')
         )
           return reply(res, 415, 'JSON is required')

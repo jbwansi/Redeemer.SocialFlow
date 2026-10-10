@@ -33,6 +33,8 @@ public static class VisualDependencyInjection
         services.AddSingleton<IVisualValidator, SkiaVisualValidator>();
         services.AddScoped<IPostVisualStore, SqlitePostVisualStore>();
         services.AddScoped<PostVisualService>();
+        services.AddScoped<IVisualIdentityRepository, SqliteVisualIdentityRepository>();
+        services.AddScoped<VisualIdentityLibrary>();
         return services;
     }
 }

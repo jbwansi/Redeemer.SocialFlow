@@ -129,6 +129,13 @@ public sealed class VisualApiTests : IAsyncLifetime
     private static IEnumerable<HttpRequestMessage> Requests(Guid post)
     {
         var route=Route(post); var id=Guid.NewGuid();
+        yield return new(HttpMethod.Get,"/api/visual-identities");
+        yield return new(HttpMethod.Post,"/api/visual-identities");
+        yield return new(HttpMethod.Put,"/api/visual-identities/"+id);
+        yield return new(HttpMethod.Delete,"/api/visual-identities/"+id);
+        yield return new(HttpMethod.Post,"/api/visual-identities/"+id+"/default");
+        yield return new(HttpMethod.Post,"/api/visual-identities/"+id+"/logo");
+        yield return new(HttpMethod.Get,"/api/visual-identities/"+id+"/logos/"+id);
         yield return new(HttpMethod.Get,route);
         yield return new(HttpMethod.Get,route+"/"+id);
         yield return new(HttpMethod.Post,route+"/upload");
@@ -197,8 +204,11 @@ public sealed class VisualApiTests : IAsyncLifetime
         client.DefaultRequestHeaders.Add("X-SocialFlow-Visual-Admin",Secret);
         if(scenario=="host") client.DefaultRequestHeaders.Host="example.com";
         if(scenario=="forwarded") client.DefaultRequestHeaders.Add("X-Forwarded-For","203.0.113.10");
-        using var response=await client.GetAsync(Route(Guid.NewGuid()));
-        Assert.Equal(HttpStatusCode.Forbidden,response.StatusCode);
+        foreach (var request in Requests(Guid.NewGuid()))
+        {
+            using (request) using (var response = await client.SendAsync(request))
+                Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        }
     }
 
     [Fact]
@@ -231,6 +241,37 @@ public sealed class VisualApiTests : IAsyncLifetime
         var access=new LocalVisualAccess(true,false,Secret,"different");
         Assert.True(access.Matches(Secret));
         Assert.False(access.Matches(Secret+"x"));
+    }
+
+    [Fact]
+    public async Task IdentityLibraryRoutesUploadLogoAndRecordEffectiveGenerationWithoutExposingStorage()
+    {
+        var list = (await _client.GetFromJsonAsync<LibraryIdentityDto[]>("/api/visual-identities"))!;
+        var identity = Assert.Single(list);
+        using var body = UploadBody(); body.Add(new StringContent(identity.Revision.ToString()), "revision");
+        using var upload = await _client.PostAsync($"/api/visual-identities/{identity.Id}/logo", body);
+        upload.EnsureSuccessStatusCode();
+        Assert.DoesNotContain("storageKey", await upload.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
+        identity = (await upload.Content.ReadFromJsonAsync<LibraryIdentityDto>())!;
+        using var image = await _client.GetAsync($"/api/visual-identities/{identity.Id}/logos/{identity.LogoId}");
+        image.EnsureSuccessStatusCode(); Assert.True(image.Headers.CacheControl!.NoStore);
+        Assert.Equal(Image(), await image.Content.ReadAsByteArrayAsync());
+        var post = await Post();
+        using var generated = await _client.PostAsJsonAsync(Route(post)+"/generate", new {
+            identity.IdentityId, Name="Temporary", Style="Flat", Colors=new[]{"#123456"}, VisualBrief="Garden",
+            LibraryId=identity.Id, identity.Revision, Instructions="Temporary instruction" });
+        generated.EnsureSuccessStatusCode();
+        var visual = (await generated.Content.ReadFromJsonAsync<VisualDto>())!;
+        Assert.Equal(identity.Id, visual.Generation!.EffectiveIdentity!.LibraryId);
+        Assert.Equal(identity.LogoId, visual.Generation.EffectiveIdentity.LogoId);
+        Assert.Equal("Temporary", visual.Generation.EffectiveIdentity.Name);
+        using var deleted = await _client.SendAsync(new HttpRequestMessage(HttpMethod.Delete,$"/api/visual-identities/{identity.Id}") {
+            Content=JsonContent.Create(new { identity.Revision }) });
+        Assert.Equal(HttpStatusCode.Conflict, deleted.StatusCode);
+        using var stale = await _client.PostAsJsonAsync(Route(post)+"/generate", new {
+            identity.IdentityId, identity.Name, identity.Style, identity.Colors, VisualBrief="Garden",
+            LibraryId=identity.Id, Revision=0 });
+        Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode); Assert.Equal(1,_generator.Calls);
     }
 
     private static byte[] Image()

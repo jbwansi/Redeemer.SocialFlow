@@ -8,9 +8,16 @@ public sealed class VisualIdentity
     public string? Slogan { get; }
     public string Style { get; }
     public IReadOnlyList<string> Colors { get; }
+    public string? Instructions { get; }
+    public Guid? LibraryId { get; }
+    public long? Revision { get; }
+    public Guid? LogoId { get; }
+    public EffectiveVisualIdentity Snapshot() => new(Id, Name, Style, Colors.ToArray(), Slogan, Instructions, LibraryId, Revision, LogoId);
 
-    public VisualIdentity(string id, string name, string style, IEnumerable<string> colors, string? slogan = null)
+    public VisualIdentity(string id, string name, string style, IEnumerable<string> colors, string? slogan = null, string? instructions = null, Guid? libraryId = null, long? revision = null, Guid? logoId = null)
     {
+        Instructions = string.IsNullOrWhiteSpace(instructions) ? null : Required(instructions, 4000, nameof(instructions));
+        LibraryId = libraryId; Revision = revision; LogoId = logoId;
         Id = Required(id, 100, nameof(id));
         Name = Required(name, 200, nameof(name));
         Style = Required(style, 1000, nameof(style));

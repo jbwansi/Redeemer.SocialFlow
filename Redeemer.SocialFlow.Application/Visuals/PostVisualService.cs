@@ -27,7 +27,7 @@ public sealed class PostVisualService(IPostVisualStore store, IVisualStorage sto
         var post = await store.EditablePostAsync(postId, token);
         var request = new GenerateVisualRequest(visualBrief ?? post.VisualBrief!, post.Platform, identity);
         var result = await generator.GenerateAsync(request, token);
-        return await SaveAsync(postId, result.Bytes, VisualOrigin.Generated, result.Metadata, token);
+        return await SaveAsync(postId, result.Bytes, VisualOrigin.Generated, result.Metadata with { EffectiveIdentity = identity.Snapshot() }, token);
     }
 
     private async Task<VisualDto> SaveAsync(Guid postId, ReadOnlyMemory<byte> bytes, VisualOrigin origin,

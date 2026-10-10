@@ -8,7 +8,7 @@ public sealed class VisualEndpointsConvention(bool enabled) : IApplicationModelC
     public void Apply(ApplicationModel application)
     {
         if (enabled) return;
-        foreach (var controller in application.Controllers.Where(c => c.ControllerType == typeof(VisualsController)).ToArray())
+        foreach (var controller in application.Controllers.Where(c => c.ControllerType == typeof(VisualsController) || c.ControllerType == typeof(VisualIdentitiesController)).ToArray())
             application.Controllers.Remove(controller);
     }
 }

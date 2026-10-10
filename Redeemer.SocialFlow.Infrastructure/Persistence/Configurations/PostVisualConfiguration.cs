@@ -9,6 +9,7 @@ public sealed class PostVisualConfiguration : IEntityTypeConfiguration<PostVisua
     public void Configure(EntityTypeBuilder<PostVisual> b)
     {
         b.HasKey(x => x.Id);
+        b.HasOne<StoredVisualIdentity>().WithMany().HasForeignKey(x => x.SourceIdentityId).OnDelete(DeleteBehavior.Restrict);
         b.Property(x => x.Id).ValueGeneratedNever();
         b.HasAlternateKey(x => new { x.SocialPostId, x.Id });
         b.HasOne<SocialPost>().WithMany().HasForeignKey(x => x.SocialPostId).OnDelete(DeleteBehavior.Restrict);

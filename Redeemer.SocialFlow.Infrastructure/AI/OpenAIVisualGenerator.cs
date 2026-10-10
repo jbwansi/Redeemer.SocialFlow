@@ -143,7 +143,7 @@ public sealed class OpenAIVisualGenerator : IVisualGenerator, IDisposable
                 request.VisualBrief,
                 Platform = request.Platform.ToString(),
                 Layout = request.Layout.ToString(),
-                Identity = new { request.Identity.Name, request.Identity.Slogan, request.Identity.Style, request.Identity.Colors }
+                Identity = new { request.Identity.Name, request.Identity.Slogan, request.Identity.Style, request.Identity.Colors, request.Identity.Instructions }
             });
     }
 

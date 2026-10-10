@@ -15,8 +15,8 @@ public sealed class VisualApiExceptionFilter : IExceptionFilter
     {
         var (status, title) = context.Exception switch
         {
-            VisualNotFoundException or PostNotFoundException => (404, "Visual or post not found"),
-            DomainException or DbUpdateConcurrencyException => (409, "Visual operation conflicts with current post state"),
+            IdentityNotFoundException or VisualNotFoundException or PostNotFoundException => (404, "Visual or post not found"),
+            DomainException or DbUpdateConcurrencyException => (409, "Modification impossible : état incompatible, référence existante ou version périmée. Actualisez les données."),
             InvalidVisualException or ArgumentException => (400, "Invalid image or generation request"),
             VisualGenerationException { Failure: VisualGenerationFailure.RateLimited or VisualGenerationFailure.ConcurrencyLimit } => (429, "Visual generation limit reached"),
             VisualGenerationException or OptionsValidationException => (503, "Visual generation unavailable"),

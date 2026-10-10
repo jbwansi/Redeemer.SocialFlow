@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { visualsApi, type Visual } from '../api/visuals'
 import { ApiError, postsApi, type Status } from '../api/posts'
 import { post } from '../test/fixtures'
+import { identitiesApi } from '../api/visualIdentities'
 import { PostVisuals } from './PostVisuals'
 import { PostEditor } from './PostEditor'
 import { PostDetails } from './PostDetails'
@@ -24,6 +25,7 @@ const visual = (id = 'v1', selected = false): Visual => ({
 })
 let items: Visual[]
 beforeEach(() => {
+  vi.spyOn(identitiesApi, 'list').mockResolvedValue([])
   items = []
   vi.mocked(visualsApi.runtime).mockResolvedValue({ enabled: true })
   vi.spyOn(visualsApi, 'list').mockImplementation(async () => [...items])

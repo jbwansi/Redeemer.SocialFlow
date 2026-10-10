@@ -1,4 +1,4 @@
-import { VisualIdentityEditor } from './VisualIdentityEditor'
+import { VisualIdentityLibrary } from './VisualIdentityLibrary'
 import { emptyIdentity } from '../lib/visualIdentities'
 import { useEffect, useRef, useState } from 'react'
 import { ApiError, type Post } from '../api/posts'
@@ -59,13 +59,14 @@ export function PostVisuals({
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState('')
   const [notice, setNotice] = useState('')
+  const [identityBusy, setIdentityBusy] = useState(false)
   const [identity, setIdentity] = useState(emptyIdentity)
   const active = useRef<AbortController | null>(null)
   const mounted = useRef(false)
   const busyCallback = useRef(onBusy)
   busyCallback.current = onBusy
   const editable = !readOnly && (post.status === 1 || post.status === 6)
-  const locked = disabled || !!busy || loading
+  const locked = disabled || !!busy || loading || identityBusy
   useEffect(() => {
     mounted.current = true
     const controller = new AbortController()
@@ -128,7 +129,7 @@ export function PostVisuals({
     }
   }
   function generate() {
-    if (!editable || locked) return
+    if (!editable || locked || identity.isActive === false) return
     const colors = identity.colors
     if (
       !brief.trim() ||
@@ -172,10 +173,19 @@ export function PostVisuals({
         <fieldset disabled={locked}>
           <details>
             <summary>Identité visuelle pour la génération</summary>
-            <VisualIdentityEditor value={identity} onChange={setIdentity} />
+            <VisualIdentityLibrary
+              value={identity}
+              onChange={setIdentity}
+              onBusy={setIdentityBusy}
+            />
           </details>
           <div className="visual-actions">
-            <button type="button" className="button primary" onClick={generate}>
+            <button
+              type="button"
+              className="button primary"
+              disabled={identity.isActive === false}
+              onClick={generate}
+            >
               {visuals.length ? 'Régénérer' : 'Générer un visuel'}
             </button>
             <label className="button">

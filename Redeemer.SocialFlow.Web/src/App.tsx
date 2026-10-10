@@ -9,6 +9,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { postsApi, type Post, type Status, type KnowledgePassage } from './api/posts'
+import { VisualIdentities } from './pages/VisualIdentities'
 import { Dashboard } from './pages/Dashboard'
 import { Calendar } from './pages/Calendar'
 import { Posts } from './pages/Posts'
@@ -19,8 +20,13 @@ import { PostDetails } from './components/PostDetails'
 import { GenerateDraft } from './components/GenerateDraft'
 import { LinkedInConnection } from './components/LinkedInConnection'
 
-type Page = 'dashboard' | 'calendar' | 'posts' | 'trash'
+type Page = 'dashboard' | 'calendar' | 'posts' | 'trash' | 'identities'
 const pages = {
+  identities: {
+    title: 'Identités visuelles',
+    description: 'Votre bibliothèque de marques, palettes et logos officiels.',
+    icon: FileText,
+  },
   dashboard: {
     title: 'Dashboard',
     description: 'A clear view of your content, from idea to impact.',
@@ -44,7 +50,9 @@ const pages = {
 }
 function currentPage(): Page {
   const hash = window.location.hash.slice(1)
-  return hash === 'calendar' || hash === 'posts' || hash === 'trash' ? hash : 'dashboard'
+  return hash === 'identities' || hash === 'calendar' || hash === 'posts' || hash === 'trash'
+    ? hash
+    : 'dashboard'
 }
 export default function App() {
   const [page, setPage] = useState<Page>(currentPage)
@@ -209,7 +217,9 @@ export default function App() {
               {notice}
             </div>
           )}
-          {page === 'trash' ? (
+          {page === 'identities' ? (
+            <VisualIdentities />
+          ) : page === 'trash' ? (
             <Trash revision={revision} />
           ) : page === 'posts' ? (
             <Posts
