@@ -1,3 +1,4 @@
+using Redeemer.SocialFlow.Domain.Entities;
 using Redeemer.SocialFlow.Domain.Enums;
 
 namespace Redeemer.SocialFlow.Application.Publishing;
@@ -5,6 +6,7 @@ namespace Redeemer.SocialFlow.Application.Publishing;
 /// <summary>Immutable publication input. Content and opaque destination are preserved verbatim.</summary>
 public sealed record PostPublicationRequest
 {
+    public PublicationVisualSnapshot? Visual { get; }
     public string Content { get; }
     public SocialPlatform Platform { get; }
     /// <summary>Provider-specific target identity, not credentials. No format or lookup capability is assumed.</summary>
@@ -12,12 +14,13 @@ public sealed record PostPublicationRequest
     /// <summary>Stable identity assigned by the caller for one logical operation, including its reconciliation.</summary>
     public Guid OperationId { get; }
 
-    public PostPublicationRequest(string content, SocialPlatform platform, string destination, Guid operationId)
+    public PostPublicationRequest(string content, SocialPlatform platform, string destination, Guid operationId, PublicationVisualSnapshot? visual = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(content);
         if (!Enum.IsDefined(platform)) throw new ArgumentException("Invalid platform.", nameof(platform));
         ArgumentException.ThrowIfNullOrWhiteSpace(destination);
         if (operationId == Guid.Empty) throw new ArgumentException("An operation ID is required.", nameof(operationId));
+        Visual = visual;
         Content = content;
         Platform = platform;
         Destination = destination;

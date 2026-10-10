@@ -13,6 +13,11 @@ public sealed class SocialPostConfiguration : IEntityTypeConfiguration<SocialPos
         builder.Property(post => post.IsDeleted).HasDefaultValue(false).IsRequired();
         builder.Property(post => post.DeletedAt).HasColumnType("TEXT").IsRequired(false);
         builder.HasKey(post => post.Id);
+        builder.Property(post => post.SelectedVisualId).IsConcurrencyToken();
+        builder.HasOne<PostVisual>().WithMany()
+            .HasForeignKey(post => new { post.Id, post.SelectedVisualId })
+            .HasPrincipalKey(visual => new { visual.SocialPostId, visual.Id })
+            .OnDelete(DeleteBehavior.Restrict);
         builder.Property(post => post.Id).ValueGeneratedNever();
         builder.Property(post => post.Title).IsRequired();
         builder.Property(post => post.Content).IsRequired();

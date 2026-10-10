@@ -1,3 +1,4 @@
+import { PostVisuals } from './PostVisuals'
 import { useState, type FormEvent } from 'react'
 import { postsApi, platforms, type Post, type Platform, type KnowledgePassage } from '../api/posts'
 import { ErrorNotice, Modal } from './shared'
@@ -23,9 +24,11 @@ export function PostEditor({
   const [brief, setBrief] = useState(post?.visualBrief || '')
   const [url, setUrl] = useState(post?.visualUrl || '')
   const [busy, setBusy] = useState(false)
+  const [visualBusy, setVisualBusy] = useState(false)
   const [error, setError] = useState<unknown>()
   async function submit(event: FormEvent) {
     event.preventDefault()
+    if (busy || visualBusy) return
     setBusy(true)
     setError(undefined)
     try {
@@ -46,11 +49,11 @@ export function PostEditor({
     }
   }
   return (
-    <Modal title={post ? 'Edit post' : 'Create a post'} close={close} busy={busy}>
+    <Modal title={post ? 'Edit post' : 'Create a post'} close={close} busy={busy || visualBusy}>
       <form onSubmit={submit} className="editor-form">
         {warnings && <AiReviewNotice warnings={warnings} references={references} />}
         {error != null && <ErrorNotice error={error} />}
-        <fieldset disabled={busy}>
+        <fieldset disabled={busy || visualBusy}>
           <label>
             Post title
             <input
@@ -104,11 +107,19 @@ export function PostEditor({
             </p>
           )}
         </fieldset>
+        {post && import.meta.env.DEV && (
+          <PostVisuals
+            post={post}
+            brief={brief}
+            disabled={busy || visualBusy}
+            onBusy={setVisualBusy}
+          />
+        )}
         <footer className="modal-footer">
-          <button type="button" className="button" disabled={busy} onClick={close}>
+          <button type="button" className="button" disabled={busy || visualBusy} onClick={close}>
             Cancel
           </button>
-          <button className="button primary" disabled={busy}>
+          <button className="button primary" disabled={busy || visualBusy}>
             {busy ? 'Saving…' : post ? 'Save changes' : 'Create draft'}
           </button>
         </footer>

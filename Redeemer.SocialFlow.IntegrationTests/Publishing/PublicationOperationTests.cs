@@ -269,8 +269,10 @@ public sealed class PublicationOperationTests : IAsyncLifetime
         var migrator = db.GetService<IMigrator>();
         await migrator.MigrateAsync("20261002215122_AddKnowledgeBase");
         var post = SocialPost.Create("Existing", "Content", SocialPlatform.LinkedIn);
-        db.SocialPosts.Add(post);
-        await db.SaveChangesAsync();
+        // Seed the historical schema without using the current EF model.
+        await db.Database.ExecuteSqlInterpolatedAsync($@"INSERT INTO SocialPosts
+            (Id,Title,Content,Platform,Status,CreatedAt,UpdatedAt,IsDeleted)
+            VALUES ({post.Id},{post.Title},{post.Content},{(int)post.Platform},{(int)post.Status},{post.CreatedAt},{post.UpdatedAt},0)");
         await migrator.MigrateAsync();
         db.ChangeTracker.Clear();
         Assert.Equal(post.Id, (await db.SocialPosts.SingleAsync()).Id);

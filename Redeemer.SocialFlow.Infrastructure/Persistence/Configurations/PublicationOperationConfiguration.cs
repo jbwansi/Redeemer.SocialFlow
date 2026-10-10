@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Redeemer.SocialFlow.Domain.Entities;
@@ -8,6 +9,9 @@ public sealed class PublicationOperationConfiguration : IEntityTypeConfiguration
 {
     public void Configure(EntityTypeBuilder<PublicationOperation> builder)
     {
+        builder.Property(x => x.Visual).HasColumnType("TEXT").HasConversion(
+            value => JsonSerializer.Serialize(value, (JsonSerializerOptions?)null),
+            value => JsonSerializer.Deserialize<PublicationVisualSnapshot>(value, (JsonSerializerOptions?)null));
         builder.ToTable("PublicationOperations");
         builder.HasKey(x => x.OperationId);
         builder.Property(x => x.OperationId).ValueGeneratedNever();

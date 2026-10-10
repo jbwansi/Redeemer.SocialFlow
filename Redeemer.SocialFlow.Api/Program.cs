@@ -1,3 +1,4 @@
+using Redeemer.SocialFlow.Api.Development.Visuals;
 using Redeemer.SocialFlow.Infrastructure;
 using Redeemer.SocialFlow.Infrastructure.AI;
 using Redeemer.SocialFlow.Application;
@@ -21,9 +22,12 @@ var connectionString = builder.Configuration.GetConnectionString("SocialFlow")
 builder.Services.AddPersistence(connectionString);
 builder.Services.AddApplication();
 builder.Services.AddOpenAIContentGeneration(builder.Configuration);
+builder.Services.AddOpenAIVisualGeneration(builder.Configuration);
+builder.Services.AddLocalVisuals(builder.Configuration, builder.Environment);
 builder.Services.AddControllers(options =>
 {
     options.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true;
+    options.Conventions.Add(new VisualEndpointsConvention(builder.Environment.IsDevelopment() && builder.Configuration.GetValue<bool>("Visuals:Enabled")));
     if (!builder.Environment.IsDevelopment())
         options.Conventions.Add(new DevelopmentOnlyControllerConvention());
 });

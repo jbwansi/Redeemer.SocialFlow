@@ -103,14 +103,20 @@ export class ApiError extends Error {
   }
 }
 const baseUrl = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '')
-export async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
+export async function apiRequest<T>(
+  path: string,
+  options: RequestInit = {},
+  transport: { baseUrl?: string; binary?: boolean } = {},
+): Promise<T> {
   let response: Response
   try {
-    response = await fetch(`${baseUrl}${path}`, {
+    response = await fetch(`${transport.baseUrl ?? baseUrl}${path}`, {
       ...options,
       headers: {
         Accept: 'application/json, application/problem+json',
-        ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+        ...(options.body && !(options.body instanceof FormData)
+          ? { 'Content-Type': 'application/json' }
+          : {}),
         ...options.headers,
       },
     })
@@ -136,7 +142,11 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
     }
     throw new ApiError({ ...problem, status: response.status })
   }
-  return response.status === 204 ? (undefined as T) : (response.json() as Promise<T>)
+  return response.status === 204
+    ? (undefined as T)
+    : transport.binary
+      ? (response.blob() as Promise<T>)
+      : (response.json() as Promise<T>)
 }
 const request = <T>(path: string, options: RequestInit = {}) =>
   apiRequest<T>(`/posts${path}`, options)

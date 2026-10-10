@@ -16,10 +16,11 @@ public sealed class PublicationOperation
     public DateTimeOffset ClaimedAt { get; private set; }
     public DateTimeOffset UpdatedAt { get; private set; }
     public DateTimeOffset? CompletedAt { get; private set; }
+    public PublicationVisualSnapshot? Visual { get; private set; }
     public string? ExternalId { get; private set; }
 
     public static PublicationOperation Claim(SocialPost post, Guid operationId, string provider,
-        string destination, TimeProvider? timeProvider = null)
+        string destination, TimeProvider? timeProvider = null, PostVisual? visual = null)
     {
         ArgumentNullException.ThrowIfNull(post);
         var now = (timeProvider ?? TimeProvider.System).GetUtcNow();
@@ -28,11 +29,16 @@ public sealed class PublicationOperation
             throw new DomainException("Provider, destination and publication content are required.");
         if (post.IsDeleted || post.Status != SocialPostStatus.Scheduled || post.ScheduledAt is null || post.ScheduledAt > now)
             throw new DomainException("Only a scheduled post that is due can be published.");
+        if (post.SelectedVisualId is not null &&
+            (visual is null || visual.Id != post.SelectedVisualId || visual.SocialPostId != post.Id ||
+             !visual.IsReady || visual.IsDeleted || visual.ValidatedAt is null))
+            throw new DomainException("The selected visual must be ready and validated.");
         return new PublicationOperation
         {
             OperationId = operationId, SocialPostId = post.Id, Provider = provider, Destination = destination,
             Content = post.Content, Platform = post.Platform, State = PublicationOperationState.Indeterminate,
-            ClaimedAt = now, UpdatedAt = now
+            ClaimedAt = now, UpdatedAt = now,
+            Visual = post.SelectedVisualId is null ? null : PublicationVisualSnapshot.From(visual!)
         };
     }
 

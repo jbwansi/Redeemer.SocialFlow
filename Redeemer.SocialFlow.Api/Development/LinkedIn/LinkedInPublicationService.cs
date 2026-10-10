@@ -13,7 +13,7 @@ public sealed record LinkedInRuntime(bool Connected, DateTimeOffset? ExpiresAt, 
     bool PublicationEnabled, bool WorkerEnabled, int WorkerIntervalSeconds, string ConnectUrl);
 public sealed record LinkedInPublicationView(PublicationOperationDto? Operation, bool CanPublish);
 public sealed record LinkedInPreview(string Content, string Destination, string Confirmation);
-internal sealed record PublicationConfirmation(Guid PostId, Guid OperationId, string Content, string Destination, DateTimeOffset ExpiresAt);
+internal sealed record PublicationConfirmation(Guid PostId, Guid OperationId, string Content, string Destination, DateTimeOffset ExpiresAt, Guid? VisualId = null);
 public sealed class LinkedInPublicationException(int status) : Exception
 {
     public int Status { get; } = status;
@@ -52,7 +52,7 @@ public sealed class LinkedInPublicationService(SocialFlowDbContext db, ILinkedIn
         var post = await db.SocialPosts.AsNoTracking().SingleAsync(x => x.Id == id, token);
         var runtime = await RuntimeAsync(token);
         if (!runtime.Connected) throw new LinkedInPublicationException(409);
-        var confirmation = new PublicationConfirmation(id, Guid.NewGuid(), post.Content, runtime.Destination!, clock.GetUtcNow().AddMinutes(5));
+        var confirmation = new PublicationConfirmation(id, Guid.NewGuid(), post.Content, runtime.Destination!, clock.GetUtcNow().AddMinutes(5), post.SelectedVisualId);
         return new(post.Content, runtime.Destination!, Protector.Protect(JsonSerializer.Serialize(confirmation)));
     }
 
@@ -72,7 +72,7 @@ public sealed class LinkedInPublicationService(SocialFlowDbContext db, ILinkedIn
         if (!current.CanPublish) throw new LinkedInPublicationException(409);
         var runtime = await RuntimeAsync(token);
         var post = await db.SocialPosts.AsNoTracking().SingleAsync(x => x.Id == id, token);
-        if (runtime.Destination != proof.Destination || post.Content != proof.Content) throw new LinkedInPublicationException(409);
+        if (runtime.Destination != proof.Destination || post.Content != proof.Content || post.SelectedVisualId != proof.VisualId) throw new LinkedInPublicationException(409);
         return await ExecuteAsync(id, proof.OperationId, runtime.Destination!, token);
     }
 

@@ -28,3 +28,11 @@ HTMLDialogElement.prototype.showModal = function () {
 HTMLDialogElement.prototype.close = function () {
   this.removeAttribute('open')
 }
+
+vi.mock('../api/visuals', async () => {
+  const actual = await vi.importActual<typeof import('../api/visuals')>('../api/visuals')
+  return {
+    ...actual,
+    visualsApi: { ...actual.visualsApi, runtime: vi.fn(async () => ({ enabled: false })) },
+  }
+})

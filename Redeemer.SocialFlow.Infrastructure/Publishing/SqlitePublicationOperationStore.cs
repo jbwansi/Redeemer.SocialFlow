@@ -25,7 +25,9 @@ public sealed class SqlitePublicationOperationStore(DbContextOptions<SocialFlowD
         if (existing is not null) return new(PublicationOperationDto.FromEntity(existing), false);
         var post = await db.SocialPosts.AsNoTracking().SingleOrDefaultAsync(x => x.Id == request.PostId, cancellationToken)
             ?? throw new PostNotFoundException(request.PostId);
-        var operation = PublicationOperation.Claim(post, request.OperationId, request.Provider, request.Destination, timeProvider);
+        var visual = post.SelectedVisualId is null ? null : await db.PostVisuals.AsNoTracking()
+            .SingleOrDefaultAsync(v => v.Id == post.SelectedVisualId, cancellationToken);
+        var operation = PublicationOperation.Claim(post, request.OperationId, request.Provider, request.Destination, timeProvider, visual);
         db.PublicationOperations.Add(operation);
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);

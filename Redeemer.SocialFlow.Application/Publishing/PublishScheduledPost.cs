@@ -22,7 +22,7 @@ public sealed class PublishScheduledPost(IPublicationOperationStore operations, 
         {
             cancellationToken.ThrowIfCancellationRequested();
             result = await publisher.PublishAsync(new(operation.Content, operation.Platform,
-                operation.Destination, operation.OperationId), cancellationToken);
+                operation.Destination, operation.OperationId, operation.Visual), cancellationToken);
         }
         catch (Exception)
         {

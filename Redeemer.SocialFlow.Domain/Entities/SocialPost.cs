@@ -25,6 +25,7 @@ public class SocialPost
 	public string? CallToAction { get; private set; }
 	public string? VisualBrief { get; private set; }
 	public string? VisualUrl { get; private set; }
+    public Guid? SelectedVisualId { get; private set; }
 
 	public DateTimeOffset? ScheduledAt { get; private set; }
 	public DateTimeOffset? PublishedAt { get; private set; }
@@ -194,7 +195,23 @@ public class SocialPost
 		UpdatedAt = now;
 	}
 
-	private void EnsureNotDeleted()
+	public void EnsureCanManageVisuals()
+    {
+        EnsureNotDeleted();
+        if (Status is not (SocialPostStatus.Draft or SocialPostStatus.Rejected))
+            throw new DomainException("Visuals can only be changed on draft or rejected posts.");
+    }
+
+    public void SelectVisual(PostVisual visual, DateTimeOffset now)
+    {
+        EnsureCanManageVisuals();
+        if (visual.SocialPostId != Id) throw new DomainException("Visual belongs to another post.");
+        visual.Validate(now);
+        SelectedVisualId = visual.Id;
+        UpdatedAt = now;
+    }
+
+    private void EnsureNotDeleted()
 	{
 		if (IsDeleted) throw new DomainException("Cette publication a été supprimée.");
 	}

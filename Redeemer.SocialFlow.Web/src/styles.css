@@ -1672,3 +1672,21 @@ tbody tr:hover {
 }
 .linkedin-panel .button { margin: .35rem .5rem .35rem 0; }
 .linkedin-panel small { display: block; margin: .5rem 0; }
+
+.visual-manager { border-top: 1px solid var(--border, #e3e5e8); padding-top: 1rem; margin-top: 1rem; }
+.visual-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-top: 1rem; }
+.visual-card { min-width: 0; border: 1px solid var(--border, #e3e5e8); border-radius: 12px; padding: 12px; }
+.visual-preview { display: block; width: 100%; max-height: 280px; object-fit: contain; border-radius: 8px; }
+.visual-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.visual-file-input { max-width: 200px; }
+.visual-manager summary { cursor: pointer; margin-bottom: 12px; }
+
+.identity-palette { margin: 16px 0; }
+.identity-color { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; }
+.identity-color label { flex: 1; min-width: 140px; margin: 0; }
+.identity-color .color-swatch { width: 44px; height: 44px; min-width: 44px; padding: 3px; border-radius: 50%; cursor: pointer; }
+.color-swatch::-webkit-color-swatch-wrapper { padding: 0; }
+.color-swatch::-webkit-color-swatch { border-radius: 50%; border: 1px solid #888; }
+.color-swatch::-moz-color-swatch { border-radius: 50%; border: 1px solid #888; }
+.color-code { font-family: monospace; }
+.color-error { flex-basis: 100%; color: #b42318; }

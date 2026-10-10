@@ -1,3 +1,4 @@
+import { PostVisuals } from './PostVisuals'
 import { useRef, useState } from 'react'
 import { postsApi, type Post, type WorkflowAction, type KnowledgePassage } from '../api/posts'
 import { dateLabel, timeLabel, timezone } from '../lib/dates'
@@ -110,6 +111,7 @@ export function PostDetails({
             <p className="url-text">{post.visualUrl}</p>
           </section>
         )}
+        {import.meta.env.DEV && <PostVisuals post={post} readOnly />}
         <div className="detail-dates">
           <span>Created {dateLabel(post.createdAt)}</span>
           {post.scheduledAt && (
