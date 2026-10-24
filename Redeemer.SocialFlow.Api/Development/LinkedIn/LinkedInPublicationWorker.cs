@@ -14,7 +14,11 @@ public sealed class LinkedInPublicationWorker(IServiceScopeFactory scopes, TimeP
                 try
                 {
                     await using var scope = scopes.CreateAsyncScope();
-                    await scope.ServiceProvider.GetRequiredService<LinkedInPublicationService>().ProcessDueAsync(stoppingToken);
+                    try { await scope.ServiceProvider.GetRequiredService<LinkedInPublicationService>().ProcessDueAsync(stoppingToken); }
+                    catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { throw; }
+                    catch (Exception) { logger.LogWarning("LI_WORKER_SCAN_FAILED"); }
+                    var facebook = scope.ServiceProvider.GetService<Redeemer.SocialFlow.Api.Development.Facebook.FacebookPublicationService>();
+                    if (facebook is not null) await facebook.ProcessDueAsync(stoppingToken);
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
                 catch (Exception) { logger.LogWarning("LI_WORKER_SCAN_FAILED"); }

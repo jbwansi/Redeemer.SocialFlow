@@ -4,7 +4,7 @@ import { postsApi, type Post, type WorkflowAction, type KnowledgePassage } from 
 import { dateLabel, timeLabel, timezone } from '../lib/dates'
 import { ErrorNotice, Modal, PlatformLabel, StatusBadge } from './shared'
 import { AiReviewNotice } from './GenerateDraft'
-import { LinkedInPublication } from './LinkedInPublication'
+import { PlatformPublication } from './PlatformPublication'
 
 // Presentation hints only: the API validates every operation, including stale state.
 const actionLabels: Record<WorkflowAction, string> = {
@@ -133,8 +133,8 @@ export function PostDetails({
             <small>Your timezone: {timezone}.</small>
           </label>
         )}
-        {import.meta.env.DEV && post.platform === 2 && (
-          <LinkedInPublication post={post} busy={busy} setBusy={setBusy} changed={changed} />
+        {import.meta.env.DEV && [1, 2].includes(post.platform) && (
+          <PlatformPublication post={post} busy={busy} setBusy={setBusy} changed={changed} />
         )}
         {confirmDelete && (
           <div className="delete-confirm" role="alert">

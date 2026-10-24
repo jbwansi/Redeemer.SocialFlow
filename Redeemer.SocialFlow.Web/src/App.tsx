@@ -18,6 +18,7 @@ import { ErrorNotice } from './components/shared'
 import { PostEditor } from './components/PostEditor'
 import { PostDetails } from './components/PostDetails'
 import { GenerateDraft } from './components/GenerateDraft'
+import { FacebookConnection } from './components/FacebookConnection'
 import { LinkedInConnection } from './components/LinkedInConnection'
 
 type Page = 'dashboard' | 'calendar' | 'posts' | 'trash' | 'identities'
@@ -211,7 +212,12 @@ export default function App() {
               )}
             </div>
           </div>
-          {import.meta.env.DEV && page === 'posts' && <LinkedInConnection />}
+          {import.meta.env.DEV && page === 'posts' && (
+            <>
+              <LinkedInConnection />
+              <FacebookConnection />
+            </>
+          )}
           {notice && (
             <div className="toast" role="status">
               {notice}

@@ -233,3 +233,26 @@ it('strictly allowlists identity and private logo routes', () => {
     expect(allowedRoute(path, 'GET')).toBe(false)
   expect(allowedRoute(root + '/' + id + '/logos/' + id, 'DELETE')).toBe(false)
 })
+
+it('protects Facebook routes and does not proxy OAuth callbacks or arbitrary Graph paths', () => {
+  expect(allowedRoute('/dev/facebook/runtime', 'GET')).toBe(true)
+  for (const suffix of ['connect', 'page', 'disconnect']) {
+    expect(allowedRoute('/dev/facebook/' + suffix, 'POST')).toBe(true)
+    expect(allowedRoute('/dev/facebook/' + suffix, 'GET')).toBe(false)
+  }
+  expect(allowedRoute('/dev/facebook/posts/' + id + '/publish', 'POST')).toBe(true)
+  for (const suffix of ['authorize', 'callback', 'me/accounts', 'runtime?access_token=x'])
+    expect(allowedRoute('/dev/facebook/' + suffix, 'GET')).toBe(false)
+  expect(
+    isLocalRequest(
+      incoming({
+        method: 'POST',
+        headers: {
+          host: 'localhost:5173',
+          'x-socialflow-local': '1',
+          origin: 'https://attacker.example',
+        },
+      }),
+    ),
+  ).toBe(false)
+})

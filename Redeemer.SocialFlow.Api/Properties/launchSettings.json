@@ -4,7 +4,8 @@
       "commandName": "Project",
       "launchBrowser": true,
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "SOCIALFLOW_VISUAL_GATEWAY_ENABLED": "true"
       },
       "applicationUrl": "https://localhost:65474;http://localhost:65475"
     }

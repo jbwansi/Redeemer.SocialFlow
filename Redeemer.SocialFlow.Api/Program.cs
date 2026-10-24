@@ -1,4 +1,5 @@
 using Redeemer.SocialFlow.Api.Development.Visuals;
+using Redeemer.SocialFlow.Api.Development.Facebook;
 using Redeemer.SocialFlow.Infrastructure;
 using Redeemer.SocialFlow.Infrastructure.AI;
 using Redeemer.SocialFlow.Application;
@@ -13,6 +14,7 @@ var builder = WebApplication.CreateBuilder(args);
 if (builder.Environment.IsDevelopment())
 {
     builder.Services.AddLocalLinkedIn(builder.Configuration, builder.Environment);
+    builder.Services.AddLocalFacebook(builder.Configuration, builder.Environment);
     // Hosting/MVC informational and trace logs may include OAuth callback query values.
     builder.Logging.AddFilter("Microsoft.AspNetCore", LogLevel.Warning);
 }
@@ -27,6 +29,7 @@ builder.Services.AddLocalVisuals(builder.Configuration, builder.Environment);
 builder.Services.AddControllers(options =>
 {
     options.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true;
+    options.Conventions.Add(new FacebookEndpointsConvention(builder.Environment.IsDevelopment() && builder.Configuration.GetValue<bool>("Facebook:Enabled")));
     options.Conventions.Add(new VisualEndpointsConvention(builder.Environment.IsDevelopment() && builder.Configuration.GetValue<bool>("Visuals:Enabled")));
     if (!builder.Environment.IsDevelopment())
         options.Conventions.Add(new DevelopmentOnlyControllerConvention());

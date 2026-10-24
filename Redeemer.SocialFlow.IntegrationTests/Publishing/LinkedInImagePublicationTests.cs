@@ -37,6 +37,8 @@ public sealed class LinkedInImagePublicationTests : IAsyncLifetime
         _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder => builder.UseEnvironment("Development")
             .UseSetting("ConnectionStrings:SocialFlow", $"Data Source={Path.Combine(_root, "test.db")};Pooling=False")
             .UseSetting("LinkedIn:PublicationEnabled", "true").UseSetting("LinkedIn:WorkerEnabled", "false")
+            // Exercise LinkedIn through the shared router with Facebook enabled too.
+            .UseSetting("Facebook:Enabled", "true").UseSetting("Facebook:PublicationEnabled", "true")
             .UseSetting("Visuals:Storage:RootPath", Path.Combine(_root, "files"))
             .ConfigureServices(services =>
             {

@@ -36,3 +36,17 @@ vi.mock('../api/visuals', async () => {
     visualsApi: { ...actual.visualsApi, runtime: vi.fn(async () => ({ enabled: false })) },
   }
 })
+
+vi.mock('../api/facebook', async () => {
+  const actual = await vi.importActual<typeof import('../api/facebook')>('../api/facebook')
+  const { ApiError } = await import('../api/posts')
+  const unavailable = () => Promise.reject(new ApiError({ status: 404, title: 'Unavailable' }))
+  return {
+    ...actual,
+    facebookApi: {
+      ...actual.facebookApi,
+      runtime: vi.fn(unavailable),
+      publication: vi.fn(unavailable),
+    },
+  }
+})

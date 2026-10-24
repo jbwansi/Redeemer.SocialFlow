@@ -9,6 +9,12 @@ const route = new RegExp(
   '^/posts/(' + guid + ')/visuals(?:/(upload|generate|' + guid + ')(/select)?)?$',
 )
 export function allowedRoute(path: string, method: string): boolean {
+  if (/^\/dev\/facebook\/(runtime|connect|page|disconnect)$/.test(path))
+    return path.endsWith('/runtime') ? method === 'GET' : method === 'POST'
+  const facebook = new RegExp(
+    '^/dev/facebook/posts/' + guid + '/(publication|preview|publish)$',
+  ).exec(path)
+  if (facebook) return facebook[1] === 'publish' ? method === 'POST' : method === 'GET'
   const identity = new RegExp(
     '^/visual-identities(?:/(' + guid + ')(?:/(default|logo)|/logos/(' + guid + '))?)?$',
   ).exec(path)
@@ -85,7 +91,8 @@ export function visualGateway(enabled: boolean, secret: string | undefined): Plu
           return reply(res, 415, 'A PNG or JPEG upload is required')
         if (
           (req.method === 'POST' || req.method === 'PUT' || req.method === 'DELETE') &&
-          (path.endsWith('/generate') ||
+          (path.startsWith('/dev/facebook/') ||
+            path.endsWith('/generate') ||
             (path.startsWith('/visual-identities') && !path.endsWith('/logo'))) &&
           !contentType.startsWith('application/json')
         )
