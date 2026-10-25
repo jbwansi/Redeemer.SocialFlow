@@ -5,16 +5,17 @@ using Redeemer.SocialFlow.Domain.Entities;
 using Redeemer.SocialFlow.Domain.Enums;
 using Redeemer.SocialFlow.Domain.Exceptions;
 using Redeemer.SocialFlow.Infrastructure.Persistence;
+using Redeemer.SocialFlow.Application.Accounts;
 
 namespace Redeemer.SocialFlow.Infrastructure.Publishing;
 
 public sealed class SqlitePublicationOperationStore(DbContextOptions<SocialFlowDbContext> options,
-    TimeProvider? timeProvider = null) : IPublicationOperationStore
+    TimeProvider? timeProvider = null, IWorkspaceAccessContext? workspace = null) : IPublicationOperationStore
 {
     public async Task<PublicationClaim> TryClaimAsync(PublishScheduledPostRequest request, CancellationToken cancellationToken = default)
     {
         // Dedicated short-lived context: never commit unrelated caller-tracked changes.
-        await using var db = new SocialFlowDbContext(options);
+        await using var db = new SocialFlowDbContext(options, workspace);
         // Microsoft.Data.Sqlite's default transaction takes the write reservation immediately.
         // Eligibility, existing-operation check and insert are serialized across contexts/processes.
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
@@ -37,7 +38,7 @@ public sealed class SqlitePublicationOperationStore(DbContextOptions<SocialFlowD
     public async Task<PublicationOperationDto> CompleteAsync(Guid operationId, PostPublicationResult result, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(result);
-        await using var db = new SocialFlowDbContext(options);
+        await using var db = new SocialFlowDbContext(options, workspace);
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
         var operation = await db.PublicationOperations.SingleAsync(x => x.OperationId == operationId, cancellationToken);
         if (operation.CompletedAt is not null) return PublicationOperationDto.FromEntity(operation);

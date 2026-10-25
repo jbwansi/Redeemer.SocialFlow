@@ -9,14 +9,19 @@ export class AccountError extends Error {
   }
 }
 
-export async function accountRequest<T>(path: string, body?: unknown): Promise<T> {
+export async function accountRequest<T>(
+  path: string,
+  body?: unknown,
+  signal?: AbortSignal,
+): Promise<T> {
   const headers: Record<string, string> = {}
   if (body !== undefined) {
-    const csrf = await accountRequest<{ token: string }>('csrf')
+    const csrf = await accountRequest<{ token: string }>('csrf', undefined, signal)
     headers['X-CSRF-TOKEN'] = csrf.token
     headers['Content-Type'] = 'application/json'
   }
   const response = await fetch(`/api/auth/${path}`, {
+    signal,
     method: body === undefined ? 'GET' : 'POST',
     credentials: 'same-origin',
     cache: 'no-store',

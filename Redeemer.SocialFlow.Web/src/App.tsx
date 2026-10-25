@@ -55,7 +55,10 @@ function currentPage(): Page {
     ? hash
     : 'dashboard'
 }
-export default function App() {
+export default function App({
+  workspaceName = 'Redeemer Holding',
+  localAdministration = true,
+}: { workspaceName?: string; localAdministration?: boolean } = {}) {
   const [page, setPage] = useState<Page>(currentPage)
   const [posts, setPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
@@ -133,21 +136,23 @@ export default function App() {
         </a>
         <div className="workspace-label">CONTENT WORKSPACE</div>
         <nav aria-label="Main navigation">
-          {Object.entries(pages).map(([id, { title, icon: Icon }]) => (
-            <a
-              key={id}
-              href={`#${id}`}
-              aria-current={page === id ? 'page' : undefined}
-              onClick={(event) => {
-                event.preventDefault()
-                navigate(id as Page)
-              }}
-            >
-              <Icon size={19} />
-              {title}
-              {page === id && <span className="nav-dot" />}
-            </a>
-          ))}
+          {Object.entries(pages)
+            .filter(([id]) => localAdministration || id !== 'identities')
+            .map(([id, { title, icon: Icon }]) => (
+              <a
+                key={id}
+                href={`#${id}`}
+                aria-current={page === id ? 'page' : undefined}
+                onClick={(event) => {
+                  event.preventDefault()
+                  navigate(id as Page)
+                }}
+              >
+                <Icon size={19} />
+                {title}
+                {page === id && <span className="nav-dot" />}
+              </a>
+            ))}
         </nav>
         <div className="sidebar-note">
           <span className="small-red-line" />
@@ -167,7 +172,7 @@ export default function App() {
         <div className="workspace-profile">
           <span>RH</span>
           <div>
-            <strong>Redeemer Holding</strong>
+            <strong>{workspaceName}</strong>
             <small>Editorial workspace</small>
           </div>
         </div>
@@ -191,7 +196,7 @@ export default function App() {
               <p>{pages[page].description}</p>
             </div>
             <div className="heading-actions">
-              {page === 'posts' && (
+              {localAdministration && page === 'posts' && (
                 <button className="button" onClick={() => setGenerating(true)}>
                   Générer un brouillon
                 </button>
@@ -212,7 +217,7 @@ export default function App() {
               )}
             </div>
           </div>
-          {import.meta.env.DEV && page === 'posts' && (
+          {localAdministration && import.meta.env.DEV && page === 'posts' && (
             <>
               <LinkedInConnection />
               <FacebookConnection />
@@ -224,7 +229,11 @@ export default function App() {
             </div>
           )}
           {page === 'identities' ? (
-            <VisualIdentities />
+            localAdministration ? (
+              <VisualIdentities />
+            ) : (
+              <p role="alert">Cette fonctionnalité n’est pas disponible dans cet espace.</p>
+            )
           ) : page === 'trash' ? (
             <Trash revision={revision} />
           ) : page === 'posts' ? (
@@ -274,6 +283,7 @@ export default function App() {
       )}
       {editor && (
         <PostEditor
+          localAdministration={localAdministration}
           post={editor.post}
           warnings={editor.post ? aiWarnings[editor.post.id] : undefined}
           references={editor.post ? aiReferences[editor.post.id] : undefined}
@@ -288,6 +298,7 @@ export default function App() {
       )}{' '}
       {!editor && selected && (
         <PostDetails
+          localAdministration={localAdministration}
           key={selected.id}
           post={selected}
           warnings={aiWarnings[selected.id]}

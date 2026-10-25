@@ -13,7 +13,7 @@ public sealed class AiGenerationConfiguration : IEntityTypeConfiguration<AiGener
         builder.ToTable("AiGenerations");
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Id).ValueGeneratedNever();
-        builder.HasOne<SocialPost>().WithMany().HasForeignKey(x => x.SocialPostId)
+        builder.HasOne<SocialPost>().WithMany().HasForeignKey(x => new { x.WorkspaceId, x.SocialPostId }).HasPrincipalKey(x => new { x.WorkspaceId, x.Id })
             .IsRequired().OnDelete(DeleteBehavior.Restrict);
         builder.Property(x => x.Subject).IsRequired();
         builder.Property(x => x.Objective).IsRequired();

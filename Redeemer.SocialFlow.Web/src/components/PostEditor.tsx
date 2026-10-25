@@ -10,12 +10,14 @@ export function PostEditor({
   saved,
   warnings,
   references,
+  localAdministration = true,
 }: {
   post?: Post
   close: () => void
   saved: (post: Post) => void
   warnings?: string[]
   references?: KnowledgePassage[]
+  localAdministration?: boolean
 }) {
   const [title, setTitle] = useState(post?.title || '')
   const [content, setContent] = useState(post?.content || '')
@@ -107,7 +109,7 @@ export function PostEditor({
             </p>
           )}
         </fieldset>
-        {post && import.meta.env.DEV && (
+        {localAdministration && post && import.meta.env.DEV && (
           <PostVisuals
             post={post}
             brief={brief}

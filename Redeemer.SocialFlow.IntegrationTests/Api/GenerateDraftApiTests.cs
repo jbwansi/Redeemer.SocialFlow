@@ -64,7 +64,7 @@ public sealed class GenerateDraftApiTests : IAsyncLifetime
         Assert.DoesNotContain(trash, post => post.Id == generated[2].Post.Id);
         foreach (var item in trash)
         {
-            var stored = await context.SocialPosts.IgnoreQueryFilters().AsNoTracking().SingleAsync(x => x.Id == item.Id);
+            var stored = await context.SocialPosts.IgnoreQueryFilters(["SoftDelete"]).AsNoTracking().SingleAsync(x => x.Id == item.Id);
             Assert.True(stored.IsDeleted);
             Assert.NotNull(stored.DeletedAt);
             Assert.Equal(new TrashedSocialPostDto(stored.Id, stored.Title, stored.Platform, stored.Status,
@@ -75,7 +75,7 @@ public sealed class GenerateDraftApiTests : IAsyncLifetime
         var active = Assert.Single((await client.GetFromJsonAsync<SocialPostDto[]>("/api/posts"))!);
         Assert.Equal(generated[2].Post.Id, active.Id);
         Assert.Equal(generated[2].Post, await client.GetFromJsonAsync<SocialPostDto>($"/api/posts/{active.Id}"));
-        Assert.Equal(3, await context.SocialPosts.IgnoreQueryFilters().CountAsync());
+        Assert.Equal(3, await context.SocialPosts.IgnoreQueryFilters(["SoftDelete"]).CountAsync());
         Assert.Equal(auditsBefore, System.Text.Json.JsonSerializer.Serialize(await context.AiGenerations.AsNoTracking().OrderBy(x => x.Id).ToListAsync()));
         using var cancelled = new CancellationTokenSource();
         cancelled.Cancel();
@@ -159,7 +159,7 @@ public sealed class GenerateDraftApiTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.NotFound, repeatedDelete.StatusCode);
         await using var scope = _factory.Services.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<SocialFlowDbContext>();
-        var stored = Assert.Single(await context.SocialPosts.IgnoreQueryFilters().ToListAsync());
+        var stored = Assert.Single(await context.SocialPosts.IgnoreQueryFilters(["SoftDelete"]).ToListAsync());
         Assert.True(stored.IsDeleted);
         Assert.NotNull(stored.DeletedAt);
         Assert.Equal(SocialPostStatus.Draft, stored.Status);

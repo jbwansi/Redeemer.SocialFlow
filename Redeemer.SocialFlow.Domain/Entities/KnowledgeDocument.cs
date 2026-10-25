@@ -3,8 +3,9 @@ using Redeemer.SocialFlow.Domain.Exceptions;
 
 namespace Redeemer.SocialFlow.Domain.Entities;
 
-public sealed class KnowledgeDocument
+public sealed class KnowledgeDocument : IWorkspaceResource
 {
+    public Guid WorkspaceId { get; private set; }
     private readonly TimeProvider _timeProvider;
     private KnowledgeDocument() : this(TimeProvider.System) { }
     private KnowledgeDocument(TimeProvider timeProvider) => _timeProvider = timeProvider;

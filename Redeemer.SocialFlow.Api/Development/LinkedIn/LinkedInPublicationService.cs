@@ -11,6 +11,7 @@ public sealed class LinkedInPublicationService(SocialFlowDbContext db, ILinkedIn
     protected override string Provider => "LinkedIn";
     public override async Task<LinkedInRuntime> RuntimeAsync(CancellationToken token)
     {
+        RequireHistoricalWorkspace();
         var member = await credentials.GetAsync(token);
         var connected = member is not null && member.ExpiresAt > Clock.GetUtcNow();
         return new(connected, member?.ExpiresAt, connected ? "urn:li:person:" + member!.Subject : null,

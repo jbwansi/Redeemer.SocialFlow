@@ -22,7 +22,7 @@ public sealed class LoginTimingGuard
 
 public sealed class AccountService(UserManager<ApplicationUser> users, SignInManager<ApplicationUser> signIn,
     IHttpContextAccessor http, IAccountEmailSender mail, IConfiguration configuration,
-    LoginTimingGuard timing, ILogger<AccountService> logger) : IAccountService
+    LoginTimingGuard timing, ILogger<AccountService> logger, IWorkspaceDirectory? workspaces = null) : IAccountService
 {
     public async Task RegisterAsync(string email, string password, CancellationToken token)
     {
@@ -86,8 +86,15 @@ public sealed class AccountService(UserManager<ApplicationUser> users, SignInMan
     {
         var decoded = Decode(code);
         var user = await users.FindByEmailAsync(email.Trim());
-        return decoded is not null && user is { EmailConfirmed: false } &&
-            (await users.ConfirmEmailAsync(user, decoded)).Succeeded;
+        if (decoded is null || user is not { EmailConfirmed: false } || !(await users.ConfirmEmailAsync(user, decoded)).Succeeded) return false;
+        // Identity lives in a separate database. Provisioning is idempotent and can be retried
+        // through POST /workspaces/personal if the business database is not yet available.
+        if (workspaces is not null)
+        {
+            try { await workspaces.EnsurePersonalAsync(user.Id); }
+            catch (Exception) { logger.LogWarning("PERSONAL_WORKSPACE_PROVISIONING_PENDING"); }
+        }
+        return true;
     }
     public async Task<bool> ResetAsync(string email, string code, string password)
     {

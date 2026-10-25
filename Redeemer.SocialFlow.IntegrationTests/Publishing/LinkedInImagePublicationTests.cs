@@ -172,7 +172,7 @@ public sealed class LinkedInImagePublicationTests : IAsyncLifetime
     [Fact]
     public async Task MigrationPreservesExistingTextOnlyOperations()
     {
-        await using var db = new SocialFlowDbContext(new DbContextOptionsBuilder<SocialFlowDbContext>()
+        await using var db = TestWorkspace.Db(new DbContextOptionsBuilder<SocialFlowDbContext>()
             .UseSqlite($"Data Source={Path.Combine(_root, "old.db")};Pooling=False").Options);
         var migrator = db.GetService<IMigrator>();
         await migrator.MigrateAsync("20261010005243_AddPostVisuals");

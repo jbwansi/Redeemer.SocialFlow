@@ -21,7 +21,7 @@ public sealed class KnowledgeDocumentServiceTests : IAsyncLifetime
     {
         await _connection.OpenAsync();
         _options = new DbContextOptionsBuilder<SocialFlowDbContext>().UseSqlite(_connection).Options;
-        await using var db = new SocialFlowDbContext(_options);
+        await using var db = TestWorkspace.Db(_options);
         await db.Database.MigrateAsync();
     }
     public Task DisposeAsync() => _connection.DisposeAsync().AsTask();
@@ -31,14 +31,14 @@ public sealed class KnowledgeDocumentServiceTests : IAsyncLifetime
     {
         KnowledgeDocumentDetailsDto created;
         var clock = new Clock();
-        await using (var write = new SocialFlowDbContext(_options))
+        await using (var write = TestWorkspace.Db(_options))
         {
             created = await new KnowledgeDocumentService(write, clock).CreateAsync(Request);
             Assert.Equal(KnowledgeDocumentStatus.Draft, created.Document.Status);
             Assert.False((await write.KnowledgeDocuments.SingleAsync()).CanBeUsedForGeneration);
             Assert.Equal(clock.GetUtcNow(), created.Document.CreatedAt);
         }
-        await using var read = new SocialFlowDbContext(_options);
+        await using var read = TestWorkspace.Db(_options);
         var service = new KnowledgeDocumentService(read);
         var result = (await service.GetByIdAsync(created.Document.Id))!;
         Assert.Equal(created.Document.Id, result.Document.Id);
@@ -69,7 +69,7 @@ public sealed class KnowledgeDocumentServiceTests : IAsyncLifetime
     [InlineData(3)]
     public async Task DomainValidation_DoesNotAttachOrPersistPartialCreation(int kind)
     {
-        await using var db = new SocialFlowDbContext(_options);
+        await using var db = TestWorkspace.Db(_options);
         var request = kind switch
         {
             0 => Request with { Title = " " },
@@ -86,12 +86,12 @@ public sealed class KnowledgeDocumentServiceTests : IAsyncLifetime
     [Fact]
     public async Task SaveFailure_RollsBackDocumentAndChunks()
     {
-        await using (var db = new SocialFlowDbContext(_options))
+        await using (var db = TestWorkspace.Db(_options))
         {
             await db.Database.ExecuteSqlRawAsync("CREATE TRIGGER fail_chunk BEFORE INSERT ON KnowledgeChunks WHEN NEW.ChunkIndex = 1 BEGIN SELECT RAISE(ABORT, 'test failure'); END;");
             await Assert.ThrowsAsync<DbUpdateException>(() => new KnowledgeDocumentService(db).CreateAsync(Request));
         }
-        await using var read = new SocialFlowDbContext(_options);
+        await using var read = TestWorkspace.Db(_options);
         Assert.Empty(await read.KnowledgeDocuments.ToListAsync());
         Assert.Empty(await read.KnowledgeChunks.ToListAsync());
     }
@@ -100,7 +100,7 @@ public sealed class KnowledgeDocumentServiceTests : IAsyncLifetime
     public async Task List_FiltersBeforePaging_WithStableTiesAndTotalCount()
     {
         var ids = new List<Guid>();
-        await using (var db = new SocialFlowDbContext(_options))
+        await using (var db = TestWorkspace.Db(_options))
         {
             var service = new KnowledgeDocumentService(db, new Clock());
             for (var i = 0; i < 5; i++)
@@ -111,7 +111,7 @@ public sealed class KnowledgeDocumentServiceTests : IAsyncLifetime
             (await db.KnowledgeDocuments.SingleAsync(x => x.Id == approved.Document.Id)).ChangeStatus(KnowledgeDocumentStatus.Approved);
             await db.SaveChangesAsync();
         }
-        await using var read = new SocialFlowDbContext(_options);
+        await using var read = TestWorkspace.Db(_options);
         var reader = new KnowledgeDocumentService(read);
         var filter = new ListKnowledgeDocumentsRequest(1, 2, KnowledgeDocumentStatus.Draft, " Secondary ", " fr ");
         var first = await reader.ListAsync(filter);
@@ -138,14 +138,14 @@ public sealed class KnowledgeDocumentServiceTests : IAsyncLifetime
     [InlineData(1, 20, null, null, " ")]
     public async Task List_RejectsInvalidArguments(int page, int size, KnowledgeDocumentStatus? status, string? theme, string? language)
     {
-        await using var db = new SocialFlowDbContext(_options);
+        await using var db = TestWorkspace.Db(_options);
         await Assert.ThrowsAsync<ArgumentException>(() => new KnowledgeDocumentService(db).ListAsync(new(page, size, status, theme, language)));
     }
 
     [Fact]
     public async Task CancellationAndNullRequests_AreRejectedWithoutChanges()
     {
-        await using var db = new SocialFlowDbContext(_options);
+        await using var db = TestWorkspace.Db(_options);
         var service = new KnowledgeDocumentService(db);
         using var source = new CancellationTokenSource();
         source.Cancel();
@@ -160,7 +160,7 @@ public sealed class KnowledgeDocumentServiceTests : IAsyncLifetime
     [Fact]
     public async Task List_OrdersByCreationInstantBeforeId()
     {
-        await using var db = new SocialFlowDbContext(_options);
+        await using var db = TestWorkspace.Db(_options);
         var old = await new KnowledgeDocumentService(db, new Clock()).CreateAsync(Request);
         var recent = await new KnowledgeDocumentService(db, new Clock { Now = new DateTimeOffset(2026, 10, 4, 0, 0, 0, TimeSpan.Zero) }).CreateAsync(Request);
         var result = await new KnowledgeDocumentService(db).ListAsync(new(PageSize: 1));
@@ -179,7 +179,7 @@ public sealed class KnowledgeDocumentServiceTests : IAsyncLifetime
     {
         Guid id;
         DateTimeOffset createdAt;
-        await using (var setup = new SocialFlowDbContext(_options))
+        await using (var setup = TestWorkspace.Db(_options))
         {
             var created = await new KnowledgeDocumentService(setup, new Clock()).CreateAsync(Request);
             id = created.Document.Id;
@@ -187,7 +187,7 @@ public sealed class KnowledgeDocumentServiceTests : IAsyncLifetime
             (await setup.KnowledgeDocuments.SingleAsync()).ChangeStatus(initial);
             await setup.SaveChangesAsync();
         }
-        await using (var write = new SocialFlowDbContext(_options))
+        await using (var write = TestWorkspace.Db(_options))
         {
             var service = new KnowledgeDocumentService(write);
             var inactive = await service.SetActiveAsync(id, false);
@@ -201,7 +201,7 @@ public sealed class KnowledgeDocumentServiceTests : IAsyncLifetime
             Assert.True(active.IsActive);
             Assert.Equal(KnowledgeDocumentStatus.Approved, active.Status);
         }
-        await using var read = new SocialFlowDbContext(_options);
+        await using var read = TestWorkspace.Db(_options);
         var saved = (await new KnowledgeDocumentService(read).GetByIdAsync(id))!;
         Assert.Equal(KnowledgeDocumentStatus.Approved, saved.Document.Status);
         Assert.True(saved.Document.IsActive);
@@ -217,26 +217,26 @@ public sealed class KnowledgeDocumentServiceTests : IAsyncLifetime
     public async Task Search_ObservesPersistedLifecycleAndDoesNotGrantGenerationUsage(bool generationUsage)
     {
         Guid id;
-        await using (var setup = new SocialFlowDbContext(_options))
+        await using (var setup = TestWorkspace.Db(_options))
             id = (await new KnowledgeDocumentService(setup).CreateAsync(Request with
             { Usages = generationUsage ? [KnowledgeUsage.Generation] : [KnowledgeUsage.Research] })).Document.Id;
         await AssertSearch(false);
-        await using (var write = new SocialFlowDbContext(_options))
+        await using (var write = TestWorkspace.Db(_options))
         {
             var approved = await new KnowledgeDocumentService(write).ApproveAsync(id);
             Assert.Equal(generationUsage, approved.Usages.Contains(KnowledgeUsage.Generation));
         }
         await AssertSearch(generationUsage);
-        await using (var write = new SocialFlowDbContext(_options))
+        await using (var write = TestWorkspace.Db(_options))
             await new KnowledgeDocumentService(write).SetActiveAsync(id, false);
         await AssertSearch(false);
-        await using (var write = new SocialFlowDbContext(_options))
+        await using (var write = TestWorkspace.Db(_options))
             await new KnowledgeDocumentService(write).SetActiveAsync(id, true);
         await AssertSearch(generationUsage);
 
         async Task AssertSearch(bool included)
         {
-            await using var read = new SocialFlowDbContext(_options);
+            await using var read = TestWorkspace.Db(_options);
             var passages = await new SqliteKnowledgePassageSearch(read).SearchForGenerationAsync(new("First"));
             if (included) Assert.Equal(id, Assert.Single(passages).KnowledgeDocumentId);
             else Assert.Empty(passages);
@@ -246,7 +246,7 @@ public sealed class KnowledgeDocumentServiceTests : IAsyncLifetime
     [Fact]
     public async Task Domain_InvalidStatusIsRejectedWithoutChangingPersistedDocument()
     {
-        await using (var write = new SocialFlowDbContext(_options))
+        await using (var write = TestWorkspace.Db(_options))
         {
             await new KnowledgeDocumentService(write).CreateAsync(Request);
             var document = await write.KnowledgeDocuments.SingleAsync();
@@ -255,7 +255,7 @@ public sealed class KnowledgeDocumentServiceTests : IAsyncLifetime
             Assert.Equal(updated, document.UpdatedAt);
             Assert.Equal(0, await write.SaveChangesAsync());
         }
-        await using var read = new SocialFlowDbContext(_options);
+        await using var read = TestWorkspace.Db(_options);
         Assert.Equal(KnowledgeDocumentStatus.Draft, (await read.KnowledgeDocuments.SingleAsync()).Status);
     }
 
@@ -264,7 +264,7 @@ public sealed class KnowledgeDocumentServiceTests : IAsyncLifetime
     [InlineData(false)]
     public async Task Lifecycle_MissingAndCancellationFollowMutationConventions(bool approve)
     {
-        await using var db = new SocialFlowDbContext(_options);
+        await using var db = TestWorkspace.Db(_options);
         var service = new KnowledgeDocumentService(db);
         var missing = Guid.NewGuid();
         var error = await Assert.ThrowsAsync<KnowledgeDocumentNotFoundException>(() => Mutate(missing, default));

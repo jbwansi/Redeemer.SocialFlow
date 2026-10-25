@@ -11,7 +11,7 @@ public sealed class KnowledgeChunkConfiguration : IEntityTypeConfiguration<Knowl
         builder.ToTable("KnowledgeChunks");
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Id).ValueGeneratedNever();
-        builder.HasOne<KnowledgeDocument>().WithMany().HasForeignKey(x => x.KnowledgeDocumentId)
+        builder.HasOne<KnowledgeDocument>().WithMany().HasForeignKey(x => new { x.WorkspaceId, x.KnowledgeDocumentId }).HasPrincipalKey(x => new { x.WorkspaceId, x.Id })
             .IsRequired().OnDelete(DeleteBehavior.Restrict);
         builder.Property(x => x.Content).IsRequired();
         builder.Property(x => x.ChunkIndex).IsRequired();

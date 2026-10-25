@@ -17,19 +17,19 @@ public sealed class ManualKnowledgeSeedTests
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
         var options = new DbContextOptionsBuilder<SocialFlowDbContext>().UseSqlite(connection).Options;
-        await using (var setup = new SocialFlowDbContext(options))
+        await using (var setup = TestWorkspace.Db(options))
             await setup.Database.MigrateAsync();
 
         Guid originalId;
-        await using (var first = new SocialFlowDbContext(options))
+        await using (var first = TestWorkspace.Db(options))
         {
             await ManualKnowledgeSeed.RunAsync([ManualKnowledgeSeed.Argument], new Environment("Development"), first, TimeProvider.System);
             originalId = (await first.KnowledgeDocuments.SingleAsync()).Id;
         }
-        await using (var second = new SocialFlowDbContext(options))
+        await using (var second = TestWorkspace.Db(options))
             await ManualKnowledgeSeed.RunAsync([ManualKnowledgeSeed.Argument], new Environment("Development"), second, TimeProvider.System);
 
-        await using var read = new SocialFlowDbContext(options);
+        await using var read = TestWorkspace.Db(options);
         var document = Assert.Single(await read.KnowledgeDocuments.ToListAsync());
         Assert.Equal(originalId, document.Id);
         Assert.Equal(ManualKnowledgeSeed.Title, document.Title);
@@ -49,7 +49,7 @@ public sealed class ManualKnowledgeSeedTests
             "Prévoir des échanges réguliers avec les bénévoles, reconnaître leur contribution et adapter les responsabilités à leurs disponibilités."
         }, chunks.Select(chunk => chunk.Content));
         Assert.All(chunks, chunk => Assert.Equal(document.Id, chunk.KnowledgeDocumentId));
-        Assert.Empty(await read.SocialPosts.IgnoreQueryFilters().ToListAsync());
+        Assert.Empty(await read.SocialPosts.IgnoreQueryFilters(["SoftDelete"]).ToListAsync());
         Assert.Empty(await read.AiGenerations.ToListAsync());
     }
 
@@ -62,7 +62,7 @@ public sealed class ManualKnowledgeSeedTests
     {
         // Unopened, unmigrated database: any database access would fail this test.
         await using var connection = new SqliteConnection("Data Source=:memory:");
-        await using var db = new SocialFlowDbContext(new DbContextOptionsBuilder<SocialFlowDbContext>().UseSqlite(connection).Options);
+        await using var db = TestWorkspace.Db(new DbContextOptionsBuilder<SocialFlowDbContext>().UseSqlite(connection).Options);
         var args = requested ? new[] { ManualKnowledgeSeed.Argument } : Array.Empty<string>();
         Assert.Equal(requested, ManualKnowledgeSeed.IsRequested(args));
         if (requested)

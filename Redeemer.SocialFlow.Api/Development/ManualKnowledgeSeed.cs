@@ -20,6 +20,7 @@ public static class ManualKnowledgeSeed
         if (!IsRequested(args)) return;
         if (!environment.IsDevelopment())
             throw new InvalidOperationException("Knowledge test seed is only available in Development.");
+        if (db.ActiveWorkspaceId is null) throw new InvalidOperationException("Knowledge maintenance requires an explicit workspace.");
 
         cancellationToken.ThrowIfCancellationRequested();
         // Keep the reserved test title as the identity; do not overwrite local edits.

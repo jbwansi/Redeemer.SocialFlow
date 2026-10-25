@@ -69,6 +69,9 @@ public static class AccountSecurity
                 .RequireAuthenticatedUser().RequireClaim("socialflow:local-admin", "true").Build();
             options.DefaultPolicy = legacy;
             options.FallbackPolicy = legacy;
+            options.AddPolicy("LocalAdministrationOnly", legacy);
+            options.AddPolicy("WorkspaceMember", new AuthorizationPolicyBuilder(IdentityConstants.ApplicationScheme, LocalScheme)
+                .RequireAuthenticatedUser().AddRequirements(new WorkspaceRequirement()).Build());
             options.AddPolicy("AccountSession", new AuthorizationPolicyBuilder(IdentityConstants.ApplicationScheme)
                 .RequireAuthenticatedUser().Build());
         });
@@ -87,7 +90,10 @@ public static class AccountSecurity
         services.AddScoped<IAccountService, AccountService>();
         services.AddScoped<IAccountEmailSender, AccountEmailSender>();
         services.AddSingleton<LoginTimingGuard>();
-        services.AddScoped<IWorkspaceAccessContext, UnresolvedWorkspaceAccessContext>();
+        services.AddScoped<WorkspaceAccessContext>();
+        services.AddScoped<IWorkspaceAccessContext>(p => p.GetRequiredService<WorkspaceAccessContext>());
+        services.AddScoped<IWorkspaceDirectory, WorkspaceDirectory>();
+        services.AddScoped<IAuthorizationHandler, WorkspaceAuthorization>();
         services.AddRateLimiter(options =>
         {
             options.RejectionStatusCode = 429;
@@ -127,6 +133,7 @@ public sealed class LocalAdministrationHandler(IOptionsMonitor<AuthenticationSch
             !Request.Headers.TryGetValue("X-SocialFlow-Visual-Admin", out var secret) || secret.Count != 1 ||
             secret[0] is not { Length: <= 256 } value || !access.Matches(value))
             return Task.FromResult(AuthenticateResult.NoResult());
+        Context.RequestServices.GetRequiredService<WorkspaceAccessContext>().Bind(Redeemer.SocialFlow.Domain.Entities.Workspace.HistoricalId);
         var principal = new ClaimsPrincipal(new ClaimsIdentity([new Claim("socialflow:local-admin", "true")], Scheme.Name));
         return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(principal, Scheme.Name)));
     }

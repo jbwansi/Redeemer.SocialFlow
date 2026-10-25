@@ -2,8 +2,9 @@ using Redeemer.SocialFlow.Domain.Exceptions;
 
 namespace Redeemer.SocialFlow.Domain.Entities;
 
-public sealed class KnowledgeChunk
+public sealed class KnowledgeChunk : IWorkspaceResource
 {
+    public Guid WorkspaceId { get; private set; }
     private KnowledgeChunk() { }
     public Guid Id { get; private set; }
     public Guid KnowledgeDocumentId { get; private set; }

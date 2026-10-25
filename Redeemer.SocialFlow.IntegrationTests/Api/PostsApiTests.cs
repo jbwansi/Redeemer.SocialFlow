@@ -95,7 +95,7 @@ public sealed class PostsApiTests : IAsyncLifetime
         Assert.Equal(post.Id, trash.Id);
         Assert.Equal(SocialPostStatus.Cancelled, trash.Status);
         await using var scope = _factory.Services.CreateAsyncScope();
-        var stored = await scope.ServiceProvider.GetRequiredService<SocialFlowDbContext>().SocialPosts.IgnoreQueryFilters().SingleAsync();
+        var stored = await scope.ServiceProvider.GetRequiredService<SocialFlowDbContext>().SocialPosts.IgnoreQueryFilters(["SoftDelete"]).SingleAsync();
         Assert.True(stored.IsDeleted);
         Assert.Equal(stored.DeletedAt, trash.DeletedAt);
     }

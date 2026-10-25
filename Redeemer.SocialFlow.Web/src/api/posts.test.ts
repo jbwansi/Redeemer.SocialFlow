@@ -36,8 +36,10 @@ describe('REST client', () => {
     expect(await postsApi.trash(controller.signal)).toEqual([deleted])
     expect(fetch).toHaveBeenCalledWith(
       '/api/posts/trash',
-      expect.objectContaining({ signal: controller.signal }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     )
+    controller.abort()
+    expect(fetch.mock.calls[0][1].signal.aborted).toBe(true)
   })
   it('generates a draft through the production endpoint and preserves warnings', async () => {
     const result = generatedDraft({ draft: { post: post(), warnings: [' Review ', ' Review '] } })
@@ -87,7 +89,8 @@ describe('REST client', () => {
     const [url, options] = fetch.mock.calls[0]
     expect(url).toContain('createdFrom=2026-01-01T12%3A00%3A00%2B02%3A00')
     expect(url).toContain('platform=2&status=4')
-    expect(options.signal).toBe(controller.signal)
+    controller.abort()
+    expect(options.signal.aborted).toBe(true)
   })
   it('uses the API verbs, bodies, and action routes', async () => {
     const fetch = vi

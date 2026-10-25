@@ -16,7 +16,7 @@ public sealed class SoftDeleteMigrationTests
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
         var options = new DbContextOptionsBuilder<SocialFlowDbContext>().UseSqlite(connection).Options;
-        await using var context = new SocialFlowDbContext(options);
+        await using var context = TestWorkspace.Db(options);
         await context.GetService<IMigrator>().MigrateAsync("20260927022624_AddAiGeneration");
         var postId = Guid.NewGuid();
         var auditId = Guid.NewGuid();
@@ -42,13 +42,13 @@ public sealed class SoftDeleteMigrationTests
         Assert.Null(await service.GetByIdAsync(postId));
         Assert.Empty(await service.ListAsync());
         await Assert.ThrowsAsync<PostNotFoundException>(() => service.SubmitForReviewAsync(postId));
-        Assert.Single(await context.SocialPosts.IgnoreQueryFilters().ToListAsync());
+        Assert.Single(await context.SocialPosts.IgnoreQueryFilters(["SoftDelete"]).ToListAsync());
         Assert.Single(await context.AiGenerations.ToListAsync());
         context.ChangeTracker.Clear();
-        context.SocialPosts.Remove(await context.SocialPosts.IgnoreQueryFilters().SingleAsync());
+        context.SocialPosts.Remove(await context.SocialPosts.IgnoreQueryFilters(["SoftDelete"]).SingleAsync());
         await Assert.ThrowsAsync<DbUpdateException>(() => context.SaveChangesAsync());
-        await using var read = new SocialFlowDbContext(options);
-        Assert.Single(await read.SocialPosts.IgnoreQueryFilters().ToListAsync());
+        await using var read = TestWorkspace.Db(options);
+        Assert.Single(await read.SocialPosts.IgnoreQueryFilters(["SoftDelete"]).ToListAsync());
         Assert.Single(await read.AiGenerations.ToListAsync());
     }
 }

@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Redeemer.SocialFlow.Api.Contracts;
 using Redeemer.SocialFlow.Application.AI;
 using Redeemer.SocialFlow.Application.SocialPosts;
@@ -6,6 +7,7 @@ using Redeemer.SocialFlow.Application.SocialPosts;
 namespace Redeemer.SocialFlow.Api.Controllers;
 
 [ApiController]
+[Authorize(Policy = "WorkspaceMember")]
 [Route("api/posts")]
 [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
 [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json")]
@@ -13,6 +15,7 @@ namespace Redeemer.SocialFlow.Api.Controllers;
 public sealed class PostsController(ISocialPostService posts) : ControllerBase
 {
     [HttpPost("generate-draft")]
+    [Authorize(Policy = "LocalAdministrationOnly")]
     [EndpointSummary("Generate and save an AI-assisted draft post")]
     [EndpointDescription("201: Draft created. 200: NoRelevantPassages or ContextLimitExceeded, no post created and no editorial fallback. References are returned context, not persisted citations.")]
     [ProducesResponseType<GenerateSocialPostDraftExecutionResult>(StatusCodes.Status201Created)]

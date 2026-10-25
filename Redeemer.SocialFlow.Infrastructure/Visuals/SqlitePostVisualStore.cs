@@ -6,14 +6,15 @@ using Redeemer.SocialFlow.Application.Visuals;
 using Redeemer.SocialFlow.Domain.Entities;
 using Redeemer.SocialFlow.Domain.Exceptions;
 using Redeemer.SocialFlow.Infrastructure.Persistence;
+using Redeemer.SocialFlow.Application.Accounts;
 
 namespace Redeemer.SocialFlow.Infrastructure.Visuals;
 
 public sealed class SqlitePostVisualStore(DbContextOptions<SocialFlowDbContext> options, IVisualStorage storage,
-    TimeProvider? timeProvider = null) : IPostVisualStore
+    TimeProvider? timeProvider = null, IWorkspaceAccessContext? workspace = null) : IPostVisualStore
 {
     private TimeProvider Clock => timeProvider ?? TimeProvider.System;
-    private SocialFlowDbContext Db() => new(options);
+    private SocialFlowDbContext Db() => new(options, workspace);
     private static async Task<SocialPost> Post(SocialFlowDbContext db, Guid id, CancellationToken token) =>
         await db.SocialPosts.SingleOrDefaultAsync(x => x.Id == id, token) ?? throw new PostNotFoundException(id);
     private static async Task<PostVisual> Visual(SocialFlowDbContext db, Guid postId, Guid id, CancellationToken token) =>
@@ -118,7 +119,7 @@ public sealed class SqlitePostVisualStore(DbContextOptions<SocialFlowDbContext> 
         await using var tx = await db.Database.BeginTransactionAsync(token);
         var candidates = await db.PostVisuals.Where(v =>
             (v.IsDeleted || !v.IsReady) &&
-            !db.SocialPosts.IgnoreQueryFilters().Any(p => p.SelectedVisualId == v.Id) &&
+            !db.SocialPosts.IgnoreQueryFilters(new[] { "SoftDelete" }).Any(p => p.SelectedVisualId == v.Id) &&
             !db.PublicationOperations.Any(o => o.SocialPostId == v.SocialPostId)).ToListAsync(token);
         int removed = 0;
         foreach (var visual in candidates.Where(v => (v.DeletedAt ?? v.CreatedAt) <= cutoff).OrderBy(v => v.PurgedAt ?? DateTimeOffset.MinValue).ThenBy(v => v.Id).Take(100))

@@ -19,7 +19,8 @@ public sealed class SocialPostPersistenceTests : IAsyncLifetime
     public async Task InitializeAsync()
     {
         _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
-            builder.UseSetting("ConnectionStrings:SocialFlow", $"Data Source={_databasePath};Pooling=False"));
+            builder.UseSetting("ConnectionStrings:SocialFlow", $"Data Source={_databasePath};Pooling=False")
+                .ConfigureServices(TestWorkspace.Register));
 
         await using var scope = _factory.Services.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<SocialFlowDbContext>();

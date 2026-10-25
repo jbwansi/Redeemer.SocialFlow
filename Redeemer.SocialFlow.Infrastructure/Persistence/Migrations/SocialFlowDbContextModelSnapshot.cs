@@ -55,9 +55,15 @@ namespace Redeemer.SocialFlow.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid>("WorkspaceId")
+                        .IsConcurrencyToken()
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("SocialPostId");
+                    b.HasIndex("WorkspaceId");
+
+                    b.HasIndex("WorkspaceId", "SocialPostId");
 
                     b.ToTable("AiGenerations", (string)null);
                 });
@@ -98,12 +104,16 @@ namespace Redeemer.SocialFlow.Infrastructure.Persistence.Migrations
                     b.Property<int>("Width")
                         .HasColumnType("INTEGER");
 
-                    b.HasKey("Id");
+                    b.Property<Guid>("WorkspaceId")
+                        .IsConcurrencyToken()
+                        .HasColumnType("TEXT");
 
-                    b.HasIndex("IdentityId");
+                    b.HasKey("Id");
 
                     b.HasIndex("StorageKey")
                         .IsUnique();
+
+                    b.HasIndex("WorkspaceId");
 
                     b.ToTable("IdentityLogos");
                 });
@@ -132,9 +142,15 @@ namespace Redeemer.SocialFlow.Infrastructure.Persistence.Migrations
                     b.Property<string>("Section")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid>("WorkspaceId")
+                        .IsConcurrencyToken()
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("KnowledgeDocumentId");
+                    b.HasIndex("WorkspaceId");
+
+                    b.HasIndex("WorkspaceId", "KnowledgeDocumentId");
 
                     b.ToTable("KnowledgeChunks", (string)null);
                 });
@@ -185,7 +201,13 @@ namespace Redeemer.SocialFlow.Infrastructure.Persistence.Migrations
                     b.Property<int>("Version")
                         .HasColumnType("INTEGER");
 
+                    b.Property<Guid>("WorkspaceId")
+                        .IsConcurrencyToken()
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("WorkspaceId");
 
                     b.ToTable("KnowledgeDocuments", (string)null);
                 });
@@ -247,12 +269,20 @@ namespace Redeemer.SocialFlow.Infrastructure.Persistence.Migrations
                     b.Property<int>("Width")
                         .HasColumnType("INTEGER");
 
+                    b.Property<Guid>("WorkspaceId")
+                        .IsConcurrencyToken()
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("SourceIdentityId");
+                    b.HasAlternateKey("WorkspaceId", "Id");
 
                     b.HasIndex("StorageKey")
                         .IsUnique();
+
+                    b.HasIndex("WorkspaceId");
+
+                    b.HasIndex("WorkspaceId", "SourceIdentityId");
 
                     b.ToTable("PostVisuals");
                 });
@@ -298,10 +328,18 @@ namespace Redeemer.SocialFlow.Infrastructure.Persistence.Migrations
                     b.Property<string>("Visual")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid>("WorkspaceId")
+                        .IsConcurrencyToken()
+                        .HasColumnType("TEXT");
+
                     b.HasKey("OperationId");
 
                     b.HasIndex("SocialPostId")
                         .IsUnique();
+
+                    b.HasIndex("WorkspaceId");
+
+                    b.HasIndex("WorkspaceId", "SocialPostId");
 
                     b.ToTable("PublicationOperations", (string)null);
                 });
@@ -359,9 +397,15 @@ namespace Redeemer.SocialFlow.Infrastructure.Persistence.Migrations
                     b.Property<string>("VisualUrl")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid>("WorkspaceId")
+                        .IsConcurrencyToken()
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("Id", "SelectedVisualId");
+                    b.HasIndex("WorkspaceId");
+
+                    b.HasIndex("WorkspaceId", "Id", "SelectedVisualId");
 
                     b.ToTable("SocialPosts", (string)null);
                 });
@@ -412,16 +456,22 @@ namespace Redeemer.SocialFlow.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid>("WorkspaceId")
+                        .IsConcurrencyToken()
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("IdentityId")
+                    b.HasIndex("WorkspaceId");
+
+                    b.HasIndex("WorkspaceId", "IdentityId")
                         .IsUnique();
 
-                    b.HasIndex("IsDefault")
+                    b.HasIndex("WorkspaceId", "IsDefault")
                         .IsUnique()
                         .HasFilter("\"IsDefault\" = 1");
 
-                    b.HasIndex("LogoId");
+                    b.HasIndex("WorkspaceId", "Id", "LogoId");
 
                     b.ToTable("VisualIdentities");
 
@@ -438,75 +488,211 @@ namespace Redeemer.SocialFlow.Infrastructure.Persistence.Migrations
                             Name = "Redeemer Holding",
                             Revision = 1L,
                             Slogan = "Transformer par les valeurs",
-                            Style = "professionnel, humain, moderne et épuré"
+                            Style = "professionnel, humain, moderne et épuré",
+                            WorkspaceId = new Guid("a661b775-1b98-4c97-8ec0-2a461f0c7001")
                         });
+                });
+
+            modelBuilder.Entity("Redeemer.SocialFlow.Domain.Entities.Workspace", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PersonalOwnerUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PersonalOwnerUserId")
+                        .IsUnique();
+
+                    b.ToTable("Workspaces");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("a661b775-1b98-4c97-8ec0-2a461f0c7001"),
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 10, 25, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Name = "Redeemer Holding",
+                            Status = 2,
+                            Type = 2
+                        });
+                });
+
+            modelBuilder.Entity("Redeemer.SocialFlow.Domain.Entities.WorkspaceMembership", b =>
+                {
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("JoinedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Role")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Status")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("WorkspaceId", "UserId");
+
+                    b.HasIndex("UserId", "Status");
+
+                    b.ToTable("WorkspaceMemberships");
                 });
 
             modelBuilder.Entity("Redeemer.SocialFlow.Domain.Entities.AiGeneration", b =>
                 {
+                    b.HasOne("Redeemer.SocialFlow.Domain.Entities.Workspace", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("Redeemer.SocialFlow.Domain.Entities.SocialPost", null)
                         .WithMany()
-                        .HasForeignKey("SocialPostId")
+                        .HasForeignKey("WorkspaceId", "SocialPostId")
+                        .HasPrincipalKey("WorkspaceId", "Id")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 
             modelBuilder.Entity("Redeemer.SocialFlow.Domain.Entities.IdentityLogo", b =>
                 {
+                    b.HasOne("Redeemer.SocialFlow.Domain.Entities.Workspace", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("Redeemer.SocialFlow.Domain.Entities.StoredVisualIdentity", null)
                         .WithMany()
-                        .HasForeignKey("IdentityId")
+                        .HasForeignKey("WorkspaceId", "IdentityId")
+                        .HasPrincipalKey("WorkspaceId", "Id")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 
             modelBuilder.Entity("Redeemer.SocialFlow.Domain.Entities.KnowledgeChunk", b =>
                 {
+                    b.HasOne("Redeemer.SocialFlow.Domain.Entities.Workspace", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("Redeemer.SocialFlow.Domain.Entities.KnowledgeDocument", null)
                         .WithMany()
-                        .HasForeignKey("KnowledgeDocumentId")
+                        .HasForeignKey("WorkspaceId", "KnowledgeDocumentId")
+                        .HasPrincipalKey("WorkspaceId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Redeemer.SocialFlow.Domain.Entities.KnowledgeDocument", b =>
+                {
+                    b.HasOne("Redeemer.SocialFlow.Domain.Entities.Workspace", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 
             modelBuilder.Entity("Redeemer.SocialFlow.Domain.Entities.PostVisual", b =>
                 {
+                    b.HasOne("Redeemer.SocialFlow.Domain.Entities.Workspace", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("Redeemer.SocialFlow.Domain.Entities.SocialPost", null)
                         .WithMany()
-                        .HasForeignKey("SocialPostId")
+                        .HasForeignKey("WorkspaceId", "SocialPostId")
+                        .HasPrincipalKey("WorkspaceId", "Id")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("Redeemer.SocialFlow.Domain.Entities.StoredVisualIdentity", null)
                         .WithMany()
-                        .HasForeignKey("SourceIdentityId")
+                        .HasForeignKey("WorkspaceId", "SourceIdentityId")
+                        .HasPrincipalKey("WorkspaceId", "Id")
                         .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("Redeemer.SocialFlow.Domain.Entities.PublicationOperation", b =>
                 {
+                    b.HasOne("Redeemer.SocialFlow.Domain.Entities.Workspace", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("Redeemer.SocialFlow.Domain.Entities.SocialPost", null)
                         .WithMany()
-                        .HasForeignKey("SocialPostId")
+                        .HasForeignKey("WorkspaceId", "SocialPostId")
+                        .HasPrincipalKey("WorkspaceId", "Id")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 
             modelBuilder.Entity("Redeemer.SocialFlow.Domain.Entities.SocialPost", b =>
                 {
+                    b.HasOne("Redeemer.SocialFlow.Domain.Entities.Workspace", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("Redeemer.SocialFlow.Domain.Entities.PostVisual", null)
                         .WithMany()
-                        .HasForeignKey("Id", "SelectedVisualId")
-                        .HasPrincipalKey("SocialPostId", "Id")
+                        .HasForeignKey("WorkspaceId", "Id", "SelectedVisualId")
+                        .HasPrincipalKey("WorkspaceId", "SocialPostId", "Id")
                         .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("Redeemer.SocialFlow.Domain.Entities.StoredVisualIdentity", b =>
                 {
+                    b.HasOne("Redeemer.SocialFlow.Domain.Entities.Workspace", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("Redeemer.SocialFlow.Domain.Entities.IdentityLogo", null)
                         .WithMany()
-                        .HasForeignKey("LogoId")
+                        .HasForeignKey("WorkspaceId", "Id", "LogoId")
+                        .HasPrincipalKey("WorkspaceId", "IdentityId", "Id")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Redeemer.SocialFlow.Domain.Entities.WorkspaceMembership", b =>
+                {
+                    b.HasOne("Redeemer.SocialFlow.Domain.Entities.Workspace", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }

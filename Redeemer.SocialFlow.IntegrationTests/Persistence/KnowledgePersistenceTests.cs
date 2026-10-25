@@ -35,7 +35,7 @@ public sealed class KnowledgePersistenceTests
             KnowledgeChunk.Create(document.Id, " Contenu\noriginal ", 0, 2, "Introduction", clock),
             KnowledgeChunk.Create(document.Id, "Suite", 1, timeProvider: clock)
         };
-        await using (var write = new SocialFlowDbContext(options))
+        await using (var write = TestWorkspace.Db(options))
         {
             // Only the isolated in-memory test database is migrated.
             await write.Database.MigrateAsync();
@@ -44,7 +44,7 @@ public sealed class KnowledgePersistenceTests
             write.KnowledgeChunks.AddRange(chunks);
             Assert.Equal(3, await write.SaveChangesAsync());
         }
-        await using (var read = new SocialFlowDbContext(options))
+        await using (var read = TestWorkspace.Db(options))
         {
             var saved = await read.KnowledgeDocuments.SingleAsync();
             Assert.Equal(document.Id, saved.Id);
@@ -82,7 +82,7 @@ public sealed class KnowledgePersistenceTests
             Assert.InRange(saved.UpdatedAt, before, DateTimeOffset.UtcNow);
             await read.SaveChangesAsync();
         }
-        await using var verify = new SocialFlowDbContext(options);
+        await using var verify = TestWorkspace.Db(options);
         var revised = await verify.KnowledgeDocuments.SingleAsync();
         Assert.Equal(new[] { "New", "Other" }, revised.Themes);
         Assert.Empty(revised.Usages);
@@ -98,7 +98,7 @@ public sealed class KnowledgePersistenceTests
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
         var options = new DbContextOptionsBuilder<SocialFlowDbContext>().UseSqlite(connection).Options;
-        await using var context = new SocialFlowDbContext(options);
+        await using var context = TestWorkspace.Db(options);
         await context.Database.MigrateAsync();
         context.KnowledgeChunks.Add(KnowledgeChunk.Create(Guid.NewGuid(), "Orphan", 0));
         await Assert.ThrowsAsync<DbUpdateException>(() => context.SaveChangesAsync());

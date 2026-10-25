@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import App from './App'
+import { WorkspaceShell } from './WorkspaceShell'
 import { AccountError, accountRequest, type Account } from './api/accounts'
 import { setLocalAdministration } from './api/posts'
 import './accounts.css'
@@ -175,6 +176,18 @@ export default function AccountShell() {
 
   const hasPassword = ['login', 'register', 'reset-password'].includes(page)
   const tokenPage = page === 'confirm-email' || page === 'reset-password'
+  if (!loading && account && !tokenPage)
+    return (
+      <>
+        {error && <p role="alert">{error}</p>}
+        <WorkspaceShell
+          key={account.id}
+          email={account.email}
+          logout={() => void logout()}
+          busy={busy}
+        />
+      </>
+    )
   return (
     <main className="account-layout">
       <section className="account-story">
@@ -195,25 +208,6 @@ export default function AccountShell() {
       <section className="account-panel" aria-label="Votre compte">
         {loading ? (
           <p role="status">Vérification de votre session…</p>
-        ) : account && !tokenPage ? (
-          <>
-            <span className="account-eyebrow">MON COMPTE</span>
-            <h2>Bienvenue dans SocialFlow</h2>
-            <p>
-              Connecté avec <strong>{account.email}</strong>
-            </p>
-            <div className="account-information">
-              <h3>Votre compte est prêt</h3>
-              <p>
-                Les espaces de travail seront disponibles dans une prochaine étape. Les
-                publications, documents et connexions existants ne sont pas accessibles depuis votre
-                compte.
-              </p>
-            </div>
-            <button disabled={busy} onClick={logout}>
-              {busy ? 'Déconnexion…' : 'Se déconnecter'}
-            </button>
-          </>
         ) : (
           <>
             <span className="account-eyebrow">REDEEMER SOCIALFLOW</span>

@@ -13,6 +13,7 @@ public sealed class KnowledgeDocumentConfiguration : IEntityTypeConfiguration<Kn
     {
         builder.ToTable("KnowledgeDocuments");
         builder.HasKey(x => x.Id);
+        builder.HasAlternateKey(x => new { x.WorkspaceId, x.Id });
         builder.Property(x => x.Id).ValueGeneratedNever();
         builder.Property(x => x.Title).IsRequired();
         builder.Property(x => x.PrimaryTheme).IsRequired();

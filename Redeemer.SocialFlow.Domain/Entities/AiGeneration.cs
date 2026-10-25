@@ -3,8 +3,9 @@ using Redeemer.SocialFlow.Domain.Exceptions;
 
 namespace Redeemer.SocialFlow.Domain.Entities;
 
-public sealed class AiGeneration
+public sealed class AiGeneration : IWorkspaceResource
 {
+    public Guid WorkspaceId { get; private set; }
     private AiGeneration() { }
 
     public Guid Id { get; private set; }

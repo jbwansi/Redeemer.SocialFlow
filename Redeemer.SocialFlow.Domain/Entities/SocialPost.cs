@@ -4,8 +4,9 @@ using Redeemer.SocialFlow.Domain.Exceptions;
 
 namespace Redeemer.SocialFlow.Domain.Entities;
 
-public class SocialPost
+public class SocialPost : IWorkspaceResource
 {
+    public Guid WorkspaceId { get; private set; }
 	private readonly TimeProvider _timeProvider;
 
 	private SocialPost() : this(TimeProvider.System) { }

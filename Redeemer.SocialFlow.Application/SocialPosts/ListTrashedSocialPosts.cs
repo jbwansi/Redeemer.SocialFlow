@@ -8,7 +8,7 @@ public sealed class ListTrashedSocialPosts(ISocialFlowDbContext context) : IList
     public async Task<IReadOnlyList<TrashedSocialPostDto>> ExecuteAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var posts = await context.SocialPosts.IgnoreQueryFilters().AsNoTracking()
+        var posts = await context.SocialPosts.IgnoreQueryFilters(["SoftDelete"]).AsNoTracking()
             .Where(post => post.IsDeleted == true)
             .Select(post => new TrashedSocialPostDto(post.Id, post.Title, post.Platform, post.Status,
                 post.CreatedAt, post.UpdatedAt, post.DeletedAt!.Value))

@@ -22,8 +22,8 @@ public sealed class PostVisualIntegrationTests : IAsyncLifetime
     private LocalVisualStorage _storage = null!;
     private readonly Clock _clock = new();
     private readonly VisualLimits _limits = new();
-    private SocialFlowDbContext Db() => new(_options);
-    private SqlitePostVisualStore Store(IVisualStorage? storage = null) => new(_options, storage ?? _storage, _clock);
+    private SocialFlowDbContext Db() => TestWorkspace.Db(_options);
+    private SqlitePostVisualStore Store(IVisualStorage? storage = null) => new(_options, storage ?? _storage, _clock, TestWorkspace.Context);
     private PostVisualService Service(IVisualStorage? storage = null) => new(Store(storage), storage ?? _storage, new SkiaVisualValidator(_limits), _limits);
     public async Task InitializeAsync()
     {
@@ -232,7 +232,7 @@ public sealed class PostVisualIntegrationTests : IAsyncLifetime
     public async Task MigrationPreservesLegacyRowsAndMatchesModel()
     {
         var path = Path.Combine(_root, "legacy.db");
-        await using var db = new SocialFlowDbContext(new DbContextOptionsBuilder<SocialFlowDbContext>().UseSqlite($"Data Source={path};Pooling=False").Options);
+        await using var db = TestWorkspace.Db(new DbContextOptionsBuilder<SocialFlowDbContext>().UseSqlite($"Data Source={path};Pooling=False").Options);
         var migrator = db.GetService<IMigrator>();
         await migrator.MigrateAsync("20261002235255_AddDurablePublicationOperations");
         var id = Guid.NewGuid();

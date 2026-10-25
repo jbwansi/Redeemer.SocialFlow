@@ -19,6 +19,7 @@ public sealed class BusinessApiFactory : WebApplicationFactory<Program>
 {
     protected override void ConfigureWebHost(IWebHostBuilder builder) => builder.ConfigureServices(services =>
     {
+        TestWorkspace.Register(services);
         services.AddTransient<BusinessAdministrator>();
         services.PostConfigure<AuthenticationOptions>(options =>
             options.SchemeMap[AccountSecurity.LocalScheme].HandlerType = typeof(BusinessAdministrator));

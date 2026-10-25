@@ -3,8 +3,9 @@ using Redeemer.SocialFlow.Domain.Exceptions;
 
 namespace Redeemer.SocialFlow.Domain.Entities;
 
-public sealed class PublicationOperation
+public sealed class PublicationOperation : IWorkspaceResource
 {
+    public Guid WorkspaceId { get; private set; }
     private PublicationOperation() { }
     public Guid OperationId { get; private set; }
     public Guid SocialPostId { get; private set; }

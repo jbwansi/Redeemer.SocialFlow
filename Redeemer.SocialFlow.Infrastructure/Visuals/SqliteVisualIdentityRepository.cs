@@ -3,12 +3,13 @@ using Redeemer.SocialFlow.Application.Visuals;
 using Redeemer.SocialFlow.Domain.Entities;
 using Redeemer.SocialFlow.Domain.Exceptions;
 using Redeemer.SocialFlow.Infrastructure.Persistence;
+using Redeemer.SocialFlow.Application.Accounts;
 
 namespace Redeemer.SocialFlow.Infrastructure.Visuals;
 
-public sealed class SqliteVisualIdentityRepository(DbContextOptions<SocialFlowDbContext> options) : IVisualIdentityRepository
+public sealed class SqliteVisualIdentityRepository(DbContextOptions<SocialFlowDbContext> options, IWorkspaceAccessContext? workspace = null) : IVisualIdentityRepository
 {
-    private SocialFlowDbContext Db() => new(options);
+    private SocialFlowDbContext Db() => new(options, workspace);
     private static async Task<StoredVisualIdentity> Find(SocialFlowDbContext db, Guid id, CancellationToken token) =>
         await db.VisualIdentities.SingleOrDefaultAsync(x => x.Id == id && !x.IsDeleted, token) ?? throw new IdentityNotFoundException();
     private static void Revision(StoredVisualIdentity identity, long revision)

@@ -14,6 +14,7 @@ public sealed class FacebookPublicationService(SocialFlowDbContext db, IFacebook
     protected override string Provider => "Facebook";
     public override async Task<LinkedInRuntime> RuntimeAsync(CancellationToken token)
     {
+        RequireHistoricalWorkspace();
         var connection = await connections.ReadAsync(token);
         var page = connection?.Pages.SingleOrDefault(p => p.Id == connection.SelectedPageId && p.CanCreate);
         var connected = options.Value.Configured && connection?.AppId == options.Value.AppId && page is not null &&

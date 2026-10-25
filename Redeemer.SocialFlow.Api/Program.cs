@@ -51,9 +51,24 @@ builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.AddOpenApi();
 
 await using var app = builder.Build();
+var historicalOwner = args.SingleOrDefault(a => a.StartsWith(HistoricalWorkspaceOwner.Prefix, StringComparison.Ordinal));
+if (historicalOwner is not null)
+{
+    if (!app.Environment.IsDevelopment()) throw new InvalidOperationException("Historical owner assignment is a local Development operation.");
+    await using var scope = app.Services.CreateAsyncScope();
+    await HistoricalWorkspaceOwner.AssignAsync(historicalOwner[HistoricalWorkspaceOwner.Prefix.Length..],
+        scope.ServiceProvider.GetRequiredService<SocialFlowDbContext>(),
+        scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<Redeemer.SocialFlow.Infrastructure.Accounts.ApplicationUser>>());
+    Console.WriteLine("Historical workspace ownership verified. No social connection was assigned or changed.");
+    return;
+}
 if (ManualKnowledgeSeed.IsRequested(args))
 {
     await using var scope = app.Services.CreateAsyncScope();
+    var workspaceArgument = args.SingleOrDefault(a => a.StartsWith("--workspace-id=", StringComparison.Ordinal));
+    if (!Guid.TryParse(workspaceArgument?["--workspace-id=".Length..], out var seedWorkspace))
+        throw new InvalidOperationException("Knowledge maintenance requires an explicit --workspace-id.");
+    scope.ServiceProvider.GetRequiredService<Redeemer.SocialFlow.Application.Accounts.WorkspaceAccessContext>().Bind(seedWorkspace);
     await ManualKnowledgeSeed.RunAsync(args, app.Environment,
         scope.ServiceProvider.GetRequiredService<SocialFlowDbContext>(), TimeProvider.System,
         app.Lifetime.ApplicationStopping);

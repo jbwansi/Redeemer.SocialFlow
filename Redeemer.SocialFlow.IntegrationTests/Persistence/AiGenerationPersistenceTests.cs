@@ -20,7 +20,7 @@ public sealed class AiGenerationPersistenceTests
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
         var options = new DbContextOptionsBuilder<SocialFlowDbContext>().UseSqlite(connection).Options;
-        await using var context = new SocialFlowDbContext(options);
+        await using var context = TestWorkspace.Db(options);
         await context.Database.MigrateAsync();
         var post = SocialPost.Create("Existing", "Body", SocialPlatform.LinkedIn);
         context.SocialPosts.Add(post);
@@ -46,7 +46,7 @@ public sealed class AiGenerationPersistenceTests
         await context.SaveChangesAsync();
         Assert.Equal(2, await context.AiGenerations.CountAsync());
         Assert.Empty(await context.SocialPosts.ToListAsync());
-        Assert.True((await context.SocialPosts.IgnoreQueryFilters().SingleAsync()).IsDeleted);
+        Assert.True((await context.SocialPosts.IgnoreQueryFilters(["SoftDelete"]).SingleAsync()).IsDeleted);
     }
 
     [Fact]
@@ -54,7 +54,7 @@ public sealed class AiGenerationPersistenceTests
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
-        await using var context = new SocialFlowDbContext(new DbContextOptionsBuilder<SocialFlowDbContext>().UseSqlite(connection).Options);
+        await using var context = TestWorkspace.Db(new DbContextOptionsBuilder<SocialFlowDbContext>().UseSqlite(connection).Options);
         await context.Database.MigrateAsync();
         context.AiGenerations.Add(AiGeneration.Create(Guid.NewGuid(), "S", "O", "A", SocialPlatform.Facebook, "P", "M", []));
         await Assert.ThrowsAsync<DbUpdateException>(() => context.SaveChangesAsync());
@@ -67,14 +67,14 @@ public sealed class AiGenerationPersistenceTests
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
         var options = new DbContextOptionsBuilder<SocialFlowDbContext>().UseSqlite(connection).Options;
-        await using (var context = new SocialFlowDbContext(options))
+        await using (var context = TestWorkspace.Db(options))
         {
             await context.Database.MigrateAsync();
             await context.Database.ExecuteSqlRawAsync("CREATE TRIGGER FailAudit BEFORE INSERT ON AiGenerations BEGIN SELECT RAISE(ABORT, 'Test failure'); END;");
             var useCase = new GenerateSocialPostDraft(new Generator(), context, new UnusedGroundedGenerator());
             await Assert.ThrowsAsync<DbUpdateException>(() => useCase.ExecuteAsync(new("S", "O", "A", SocialPlatform.Facebook)));
         }
-        await using var read = new SocialFlowDbContext(options);
+        await using var read = TestWorkspace.Db(options);
         Assert.Empty(await read.SocialPosts.ToListAsync());
         Assert.Empty(await read.AiGenerations.ToListAsync());
     }

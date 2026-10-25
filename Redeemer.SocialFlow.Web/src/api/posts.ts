@@ -1,3 +1,6 @@
+import { accountRequest } from './accounts'
+import { workspaceRequest } from './workspaceTransport'
+
 export const platforms = { 1: 'Facebook', 2: 'LinkedIn', 3: 'Instagram' } as const
 export const statuses = {
   1: 'Draft',
@@ -113,10 +116,28 @@ export async function apiRequest<T>(
   transport: { baseUrl?: string; binary?: boolean } = {},
 ): Promise<T> {
   let response: Response
+  const workspace = workspaceRequest()
+  const signal = options.signal
+    ? AbortSignal.any([options.signal, workspace.signal])
+    : workspace.signal
   try {
     const local = localAdministration && !transport.baseUrl
+    const csrfHeaders: Record<string, string> = {}
+    if (
+      workspace.id &&
+      !local &&
+      !transport.baseUrl &&
+      !['GET', 'HEAD', 'OPTIONS'].includes(options.method ?? 'GET')
+    ) {
+      const csrf = await accountRequest<{ token: string }>('csrf', undefined, signal)
+      csrfHeaders['X-CSRF-TOKEN'] = csrf.token
+    }
+    workspace.assertCurrent()
     response = await fetch(`${transport.baseUrl ?? (local ? '/local-visuals' : baseUrl)}${path}`, {
       ...options,
+      signal,
+      credentials: 'same-origin',
+      cache: 'no-store',
       headers: {
         Accept: 'application/json, application/problem+json',
         ...(local ? { 'X-SocialFlow-Local': '1' } : {}),
@@ -124,6 +145,8 @@ export async function apiRequest<T>(
           ? { 'Content-Type': 'application/json' }
           : {}),
         ...options.headers,
+        ...(workspace.id && !local && !transport.baseUrl ? { 'X-Workspace-Id': workspace.id } : {}),
+        ...csrfHeaders,
       },
     })
   } catch (error) {
@@ -139,6 +162,7 @@ export async function apiRequest<T>(
       detail: 'We couldn’t reach SocialFlow. Check your connection and try again.',
     })
   }
+  workspace.assertCurrent()
   if (!response.ok) {
     let problem: ProblemDetails = { title: `Request failed (${response.status})` }
     try {
@@ -146,13 +170,19 @@ export async function apiRequest<T>(
     } catch {
       /* Proxy failures may not contain JSON. */
     }
+    workspace.assertCurrent()
+    if (workspace.id && (response.status === 401 || response.status === 403))
+      window.dispatchEvent(new CustomEvent('workspace-access-lost'))
     throw new ApiError({ ...problem, status: response.status })
   }
-  return response.status === 204
-    ? (undefined as T)
-    : transport.binary
-      ? (response.blob() as Promise<T>)
-      : (response.json() as Promise<T>)
+  const result =
+    response.status === 204
+      ? (undefined as T)
+      : transport.binary
+        ? await (response.blob() as Promise<T>)
+        : await (response.json() as Promise<T>)
+  workspace.assertCurrent()
+  return result
 }
 const request = <T>(path: string, options: RequestInit = {}) =>
   apiRequest<T>(`/posts${path}`, options)

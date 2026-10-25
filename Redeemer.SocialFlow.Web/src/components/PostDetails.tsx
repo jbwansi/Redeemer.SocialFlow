@@ -22,6 +22,7 @@ export function PostDetails({
   removed,
   warnings,
   references,
+  localAdministration = true,
 }: {
   post: Post
   close: () => void
@@ -30,6 +31,7 @@ export function PostDetails({
   removed: () => void
   warnings?: string[]
   references?: KnowledgePassage[]
+  localAdministration?: boolean
 }) {
   const [busy, setBusy] = useState(false)
   const deleting = useRef(false)
@@ -111,7 +113,7 @@ export function PostDetails({
             <p className="url-text">{post.visualUrl}</p>
           </section>
         )}
-        {import.meta.env.DEV && <PostVisuals post={post} readOnly />}
+        {localAdministration && import.meta.env.DEV && <PostVisuals post={post} readOnly />}
         <div className="detail-dates">
           <span>Created {dateLabel(post.createdAt)}</span>
           {post.scheduledAt && (
@@ -133,7 +135,7 @@ export function PostDetails({
             <small>Your timezone: {timezone}.</small>
           </label>
         )}
-        {import.meta.env.DEV && [1, 2].includes(post.platform) && (
+        {localAdministration && import.meta.env.DEV && [1, 2].includes(post.platform) && (
           <PlatformPublication post={post} busy={busy} setBusy={setBusy} changed={changed} />
         )}
         {confirmDelete && (

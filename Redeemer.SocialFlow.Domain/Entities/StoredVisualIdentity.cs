@@ -3,8 +3,9 @@ using Redeemer.SocialFlow.Domain.Exceptions;
 
 namespace Redeemer.SocialFlow.Domain.Entities;
 
-public sealed class StoredVisualIdentity
+public sealed class StoredVisualIdentity : IWorkspaceResource
 {
+    public Guid WorkspaceId { get; private set; }
     private StoredVisualIdentity() { }
     public Guid Id { get; private set; }
     public string IdentityId { get; private set; } = "";
@@ -57,8 +58,9 @@ public sealed class StoredVisualIdentity
 }
 
 // Immutable original files, including replaced logos, are retained for historical snapshots.
-public sealed class IdentityLogo
+public sealed class IdentityLogo : IWorkspaceResource
 {
+    public Guid WorkspaceId { get; private set; }
     private IdentityLogo() { }
     public Guid Id { get; private set; }
     public Guid IdentityId { get; private set; }

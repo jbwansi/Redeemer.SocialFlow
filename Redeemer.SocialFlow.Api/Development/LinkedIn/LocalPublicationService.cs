@@ -25,6 +25,11 @@ public abstract class LocalPublicationService(SocialFlowDbContext db, LinkedInPu
 {
     protected TimeProvider Clock => clock;
     protected LinkedInPublicationSettings Settings => settings;
+    protected void RequireHistoricalWorkspace()
+    {
+        if (db.ActiveWorkspaceId != Redeemer.SocialFlow.Domain.Entities.Workspace.HistoricalId)
+            throw new LinkedInPublicationException(403);
+    }
     protected abstract SocialPlatform Platform { get; }
     protected abstract string Provider { get; }
     protected virtual string ConfirmationPurpose => Provider + ".ManualPublicationConfirmation.v1";
@@ -32,6 +37,7 @@ public abstract class LocalPublicationService(SocialFlowDbContext db, LinkedInPu
     public abstract Task<LinkedInRuntime> RuntimeAsync(CancellationToken token);
     public async Task<LinkedInPublicationView> GetAsync(Guid id, CancellationToken token)
     {
+        RequireHistoricalWorkspace();
         var post = await db.SocialPosts.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, token)
             ?? throw new LinkedInPublicationException(404);
         var operation = await db.PublicationOperations.AsNoTracking().SingleOrDefaultAsync(x => x.SocialPostId == id, token);
@@ -74,6 +80,7 @@ public abstract class LocalPublicationService(SocialFlowDbContext db, LinkedInPu
 
     public async Task ProcessDueAsync(CancellationToken token)
     {
+        RequireHistoricalWorkspace();
         if (!settings.WorkerEnabled) return;
         var runtime = await RuntimeAsync(token);
         if (!runtime.Connected || !runtime.PublicationEnabled) return;

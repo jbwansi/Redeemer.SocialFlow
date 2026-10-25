@@ -235,7 +235,7 @@ public sealed class DevelopmentAiApiTests : IAsyncLifetime
         Assert.Null(_generator.Received);
         await using var scope = _factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SocialFlowDbContext>();
-        Assert.Empty(await db.SocialPosts.IgnoreQueryFilters().ToListAsync());
+        Assert.Empty(await db.SocialPosts.IgnoreQueryFilters(["SoftDelete"]).ToListAsync());
         Assert.Empty(await db.AiGenerations.ToListAsync());
         Assert.Empty(await db.KnowledgeDocuments.ToListAsync());
         Assert.Empty(await db.KnowledgeChunks.ToListAsync());

@@ -25,6 +25,7 @@ public sealed class GenerateSocialPostDraftTests : IAsyncLifetime
     {
         await _connection.OpenAsync();
         var services = new ServiceCollection();
+        TestWorkspace.Register(services);
         services.AddDbContext<SocialFlowDbContext>(options => options.UseSqlite(_connection));
         services.AddScoped<ISocialFlowDbContext>(sp => sp.GetRequiredService<SocialFlowDbContext>());
         services.AddScoped<IKnowledgeDbContext>(sp => sp.GetRequiredService<SocialFlowDbContext>());

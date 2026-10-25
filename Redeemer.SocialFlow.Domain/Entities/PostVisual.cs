@@ -4,8 +4,9 @@ namespace Redeemer.SocialFlow.Domain.Entities;
 
 public enum VisualOrigin { Generated = 1, Uploaded = 2 }
 
-public sealed class PostVisual
+public sealed class PostVisual : IWorkspaceResource
 {
+    public Guid WorkspaceId { get; private set; }
     private PostVisual() { }
     public Guid Id { get; private set; }
     public Guid SocialPostId { get; private set; }

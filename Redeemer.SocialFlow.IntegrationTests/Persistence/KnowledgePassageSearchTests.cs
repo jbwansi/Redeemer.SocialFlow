@@ -20,7 +20,7 @@ public sealed class KnowledgePassageSearchTests : IAsyncLifetime
     public async Task InitializeAsync()
     {
         await _connection.OpenAsync();
-        _context = new(new DbContextOptionsBuilder<SocialFlowDbContext>().UseSqlite(_connection).Options);
+        _context = new(new DbContextOptionsBuilder<SocialFlowDbContext>().UseSqlite(_connection).Options, TestWorkspace.Context);
         await _context.Database.MigrateAsync();
         _search = new(_context);
     }

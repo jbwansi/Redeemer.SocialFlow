@@ -14,7 +14,8 @@ describe('visual transport', () => {
     expect(options.headers['Content-Type']).toBeUndefined()
     expect(options.headers['X-SocialFlow-Local']).toBe('1')
     expect(options.headers['X-SocialFlow-Visual-Admin']).toBeUndefined()
-    expect(options.signal).toBe(controller.signal)
+    controller.abort()
+    expect(options.signal.aborted).toBe(true)
   })
   it('reads binary images and sends generation only on explicit invocation', async () => {
     const fetch = vi

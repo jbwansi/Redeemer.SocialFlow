@@ -9,14 +9,15 @@ public sealed class SocialPostConfiguration : IEntityTypeConfiguration<SocialPos
     public void Configure(EntityTypeBuilder<SocialPost> builder)
     {
         builder.ToTable("SocialPosts");
-        builder.HasQueryFilter(post => !post.IsDeleted);
+        builder.HasQueryFilter("SoftDelete", post => !post.IsDeleted);
         builder.Property(post => post.IsDeleted).HasDefaultValue(false).IsRequired();
         builder.Property(post => post.DeletedAt).HasColumnType("TEXT").IsRequired(false);
         builder.HasKey(post => post.Id);
+        builder.HasAlternateKey(post => new { post.WorkspaceId, post.Id });
         builder.Property(post => post.SelectedVisualId).IsConcurrencyToken();
         builder.HasOne<PostVisual>().WithMany()
-            .HasForeignKey(post => new { post.Id, post.SelectedVisualId })
-            .HasPrincipalKey(visual => new { visual.SocialPostId, visual.Id })
+            .HasForeignKey(post => new { post.WorkspaceId, post.Id, post.SelectedVisualId })
+            .HasPrincipalKey(visual => new { visual.WorkspaceId, visual.SocialPostId, visual.Id })
             .OnDelete(DeleteBehavior.Restrict);
         builder.Property(post => post.Id).ValueGeneratedNever();
         builder.Property(post => post.Title).IsRequired();

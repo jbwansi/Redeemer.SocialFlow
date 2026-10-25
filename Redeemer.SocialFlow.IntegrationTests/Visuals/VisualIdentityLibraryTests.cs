@@ -17,8 +17,8 @@ public sealed class VisualIdentityLibraryTests : IAsyncLifetime
     private DbContextOptions<SocialFlowDbContext> options = null!;
     private IVisualStorage storage = null!;
     private readonly VisualLimits limits = new();
-    private SocialFlowDbContext Db() => new(options);
-    private VisualIdentityLibrary Library(IVisualStorage? files = null) => new(new SqliteVisualIdentityRepository(options), files ?? storage, new SkiaVisualValidator(limits), limits);
+    private SocialFlowDbContext Db() => TestWorkspace.Db(options);
+    private VisualIdentityLibrary Library(IVisualStorage? files = null) => new(new SqliteVisualIdentityRepository(options, TestWorkspace.Context), files ?? storage, new SkiaVisualValidator(limits), limits);
     private static IdentityInput Input(string code = "ACME", bool active = true) => new(code, "Acme", "Flat", ["#123456"], "Hello", "Clean shapes", active);
     public async Task InitializeAsync()
     {
@@ -86,7 +86,7 @@ public sealed class VisualIdentityLibraryTests : IAsyncLifetime
         var effective = await Library().ResolveAsync(identity.Id, identity.Revision, new("CUSTOM", "Temporary name", "Override style", ["#FEDCBA"], "Temporary slogan", "Temporary instruction"));
         await using var db = Db();
         var post = SocialPost.Create("Title", "Content", SocialPlatform.LinkedIn); db.SocialPosts.Add(post); await db.SaveChangesAsync();
-        var service = new PostVisualService(new SqlitePostVisualStore(options, storage), storage, new SkiaVisualValidator(limits), limits);
+        var service = new PostVisualService(new SqlitePostVisualStore(options, storage, workspace: TestWorkspace.Context), storage, new SkiaVisualValidator(limits), limits);
         var visual = await service.GenerateAsync(post.Id, effective, "Garden", new Generator());
         var snapshot = visual.Generation!.EffectiveIdentity!;
         Assert.Equal(identity.Id, snapshot.LibraryId); Assert.Equal(identity.LogoId, snapshot.LogoId);
@@ -105,14 +105,14 @@ public sealed class VisualIdentityLibraryTests : IAsyncLifetime
         var effective = await Library().ResolveAsync(identity.Id, identity.Revision, new("ACME", "Acme", "Flat", ["#123456"]));
         await Library().DeleteAsync(identity.Id, identity.Revision);
         await using var db = Db(); var post = SocialPost.Create("Title", "Content", SocialPlatform.LinkedIn); db.Add(post); await db.SaveChangesAsync();
-        var service = new PostVisualService(new SqlitePostVisualStore(options, storage), storage, new SkiaVisualValidator(limits), limits);
+        var service = new PostVisualService(new SqlitePostVisualStore(options, storage, workspace: TestWorkspace.Context), storage, new SkiaVisualValidator(limits), limits);
         await Assert.ThrowsAsync<DomainException>(() => service.GenerateAsync(post.Id, effective, "Garden", new Generator()));
         Assert.Empty(await db.PostVisuals.ToListAsync());
     }
     [Fact] public async Task MigrationPreservesExistingSelectedVisualAndLegacyMetadata()
     {
         var legacyOptions = new DbContextOptionsBuilder<SocialFlowDbContext>().UseSqlite($"Data Source={Path.Combine(root, "legacy.db")};Pooling=False").Options;
-        await using var db = new SocialFlowDbContext(legacyOptions);
+        await using var db = TestWorkspace.Db(legacyOptions);
         var migrator = db.GetService<IMigrator>();
         await migrator.MigrateAsync("20261010021112_AddPublicationVisualSnapshot");
         var post = Guid.NewGuid(); var visual = Guid.NewGuid(); var now = DateTimeOffset.UtcNow;

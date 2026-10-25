@@ -17,8 +17,8 @@ public sealed class PublicationOperationTests : IAsyncLifetime
     private readonly string _path = Path.Combine(Path.GetTempPath(), $"publication-{Guid.NewGuid():N}.db");
     private DbContextOptions<SocialFlowDbContext> _options = null!;
     private readonly Clock _clock = new(new DateTimeOffset(2030, 1, 2, 12, 0, 0, TimeSpan.Zero));
-    private SocialFlowDbContext Db() => new(_options);
-    private SqlitePublicationOperationStore Store() => new(_options, _clock);
+    private SocialFlowDbContext Db() => TestWorkspace.Db(_options);
+    private SqlitePublicationOperationStore Store() => new(_options, _clock, TestWorkspace.Context);
     private static PublishScheduledPostRequest Request(Guid postId) => new(postId, Guid.NewGuid(), "TestProvider", "opaque-target");
 
     public async Task InitializeAsync()
@@ -265,7 +265,7 @@ public sealed class PublicationOperationTests : IAsyncLifetime
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
-        await using var db = new SocialFlowDbContext(new DbContextOptionsBuilder<SocialFlowDbContext>().UseSqlite(connection).Options);
+        await using var db = TestWorkspace.Db(new DbContextOptionsBuilder<SocialFlowDbContext>().UseSqlite(connection).Options);
         var migrator = db.GetService<IMigrator>();
         await migrator.MigrateAsync("20261002215122_AddKnowledgeBase");
         var post = SocialPost.Create("Existing", "Content", SocialPlatform.LinkedIn);

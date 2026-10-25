@@ -17,7 +17,7 @@ public sealed class PublicationOperationConfiguration : IEntityTypeConfiguration
         builder.Property(x => x.OperationId).ValueGeneratedNever();
         // One logical operation per post, including certain failures: no automatic retry path.
         builder.HasIndex(x => x.SocialPostId).IsUnique();
-        builder.HasOne<SocialPost>().WithMany().HasForeignKey(x => x.SocialPostId).IsRequired().OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<SocialPost>().WithMany().HasForeignKey(x => new { x.WorkspaceId, x.SocialPostId }).HasPrincipalKey(x => new { x.WorkspaceId, x.Id }).IsRequired().OnDelete(DeleteBehavior.Restrict);
         builder.Property(x => x.Provider).IsRequired();
         builder.Property(x => x.Destination).IsRequired();
         builder.Property(x => x.Content).IsRequired();
