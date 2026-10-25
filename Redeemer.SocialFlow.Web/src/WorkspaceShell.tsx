@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import App from './App'
+import { Team } from './pages/Team'
+import { roleNames } from './api/team'
 import { workspacesApi, type Workspace } from './api/workspaces'
 import { setActiveWorkspace } from './api/workspaceTransport'
 import { setLocalAdministration } from './api/posts'
@@ -21,6 +23,7 @@ export function WorkspaceShell({
   const [name, setName] = useState('')
   const [revision, setRevision] = useState(0)
   const [directory, setDirectory] = useState(true)
+  const [team, setTeam] = useState(false)
   const pending = useRef<AbortController | null>(null)
 
   useEffect(() => {
@@ -61,6 +64,7 @@ export function WorkspaceShell({
   }, [revision])
 
   async function select(id: string) {
+    setTeam(false)
     pending.current?.abort()
     const controller = new AbortController()
     pending.current = controller
@@ -104,6 +108,7 @@ export function WorkspaceShell({
     }
   }
   function showDirectory() {
+    setTeam(false)
     pending.current?.abort()
     setActiveWorkspace(null)
     setActive(null)
@@ -111,42 +116,57 @@ export function WorkspaceShell({
     setLoading(false)
     location.hash = 'workspaces'
   }
-  return (
-    <>
-      <header className="workspace-switcher">
-        <button className="button" onClick={showDirectory}>
-          Mes espaces
-        </button>
-        <label>
-          Espace actif{' '}
-          <select
-            aria-label="Espace actif"
-            value={active?.id ?? ''}
-            onChange={(event) => void select(event.target.value)}
-            disabled={loading}
-          >
-            <option value="" disabled>
-              Sélectionner un espace
+  const dashboard = !loading && !directory && active && !team
+  const workspaceHeader = (
+    <header className="workspace-switcher">
+      <button className="button" onClick={showDirectory}>
+        Mes espaces
+      </button>
+      <label>
+        Espace actif{' '}
+        <select
+          aria-label="Espace actif"
+          value={active?.id ?? ''}
+          onChange={(event) => void select(event.target.value)}
+          disabled={loading}
+        >
+          <option value="" disabled>
+            Sélectionner un espace
+          </option>
+          {workspaces.map((workspace) => (
+            <option key={workspace.id} value={workspace.id}>
+              {workspace.name}
             </option>
-            {workspaces.map((workspace) => (
-              <option key={workspace.id} value={workspace.id}>
-                {workspace.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <span>{email}</span>
+          ))}
+        </select>
+      </label>
+      <span>{email}</span>
+      {active?.type === 2 && (
         <button
           className="button"
-          disabled={busy}
           onClick={() => {
-            showDirectory()
-            logout()
+            if (team) void select(active.id)
+            else setTeam(true)
           }}
         >
-          Se déconnecter
+          {team ? 'Publications' : 'Équipe'}
         </button>
-      </header>
+      )}
+      <button
+        className="button"
+        disabled={busy}
+        onClick={() => {
+          showDirectory()
+          logout()
+        }}
+      >
+        Se déconnecter
+      </button>
+    </header>
+  )
+  return (
+    <>
+      {!dashboard && workspaceHeader}
       {error && (
         <p role="alert" className="workspace-access-error">
           {error} <button onClick={() => setRevision((value) => value + 1)}>Réessayer</button>
@@ -166,7 +186,7 @@ export function WorkspaceShell({
               <article key={workspace.id}>
                 <span>{workspace.type === 1 ? 'Personnel' : 'Professionnel'}</span>
                 <h2>{workspace.name}</h2>
-                <p>{workspace.role === 1 ? 'Propriétaire' : 'Membre'}</p>
+                <p>{roleNames[workspace.role]}</p>
                 <button className="button primary" onClick={() => void select(workspace.id)}>
                   Ouvrir {workspace.name}
                 </button>
@@ -189,7 +209,27 @@ export function WorkspaceShell({
           </form>
         </main>
       ) : (
-        <App key={active.id} workspaceName={active.name} localAdministration={false} />
+        <>
+          {team ? (
+            <Team
+              key={active.id}
+              workspaceId={active.id}
+              email={email}
+              left={() => {
+                showDirectory()
+                setRevision((value) => value + 1)
+              }}
+            />
+          ) : (
+            <App
+              key={active.id}
+              workspaceName={active.name}
+              workspaceHeader={workspaceHeader}
+              localAdministration={false}
+              canEdit={active.role !== 4}
+            />
+          )}
+        </>
       )}
     </>
   )

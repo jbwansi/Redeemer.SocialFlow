@@ -9,7 +9,17 @@ vi.mock('./api/workspaces', () => ({
   workspacesApi: { personal: vi.fn(), list: vi.fn(), select: vi.fn(), create: vi.fn() },
 }))
 vi.mock('./App', () => ({
-  default: ({ workspaceName }: { workspaceName: string }) => <div>Contenu : {workspaceName}</div>,
+  default: ({
+    workspaceName,
+    workspaceHeader,
+  }: {
+    workspaceName: string
+    workspaceHeader: import('react').ReactNode
+  }) => (
+    <div>
+      {workspaceHeader}Contenu : {workspaceName}
+    </div>
+  ),
 }))
 const first: Workspace = { id: 'one', name: 'Personnel Alice', type: 1, status: 1, role: 1 }
 const second: Workspace = { ...first, id: 'two', name: 'Studio Alice', type: 2 }

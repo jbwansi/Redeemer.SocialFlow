@@ -19,7 +19,7 @@ export function Posts({
   revision,
 }: {
   open: (post: Post) => void
-  create: () => void
+  create?: () => void
   initialStatus?: Status
   revision: number
 }) {
@@ -187,9 +187,11 @@ export function Posts({
               : 'Your next story starts here'
           }
           action={
-            <button className="button" onClick={create}>
-              Create a post
-            </button>
+            create && (
+              <button className="button" onClick={create}>
+                Create a post
+              </button>
+            )
           }
         >
           Try a different filter or create something new.

@@ -12,7 +12,7 @@ public sealed class AccountEmailSender(IConfiguration config, IHostEnvironment e
     {
         using var message = new MailMessage(config["Authentication:Email:From"] ?? "accounts@localhost", email)
         {
-            Subject = purpose == "confirm-email" ? "Confirmez votre compte SocialFlow" : "Réinitialisez votre mot de passe SocialFlow",
+            Subject = purpose == "workspace-invitation" ? "Invitation à une équipe SocialFlow" : purpose == "confirm-email" ? "Confirmez votre compte SocialFlow" : "Réinitialisez votre mot de passe SocialFlow",
             Body = "Utilisez ce lien personnel dans l'heure qui suit :\n\n" + link +
                 "\n\nSi vous n'êtes pas à l'origine de cette demande, ignorez ce message."
         };

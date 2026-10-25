@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import App from './App'
+import { InvitationAcceptance } from './InvitationAcceptance'
 import { WorkspaceShell } from './WorkspaceShell'
 import { AccountError, accountRequest, type Account } from './api/accounts'
 import { setLocalAdministration } from './api/posts'
@@ -32,6 +33,11 @@ function route() {
 
 export default function AccountShell() {
   const [initial] = useState(route)
+  const [invitation, setInvitation] = useState(() =>
+    location.hash.startsWith('#accept-invitation?')
+      ? new URLSearchParams(location.hash.split('?')[1]).get('code')
+      : null,
+  )
   const [page, setPage] = useState<Page>(initial.page)
   const [email, setEmail] = useState(initial.params.get('email') ?? '')
   const [code] = useState(initial.params.get('code') ?? '')
@@ -174,6 +180,18 @@ export default function AccountShell() {
       </>
     )
 
+  if (!loading && account && invitation)
+    return (
+      <InvitationAcceptance
+        code={invitation}
+        email={account.email}
+        logout={() => void logout()}
+        done={() => {
+          setInvitation(null)
+          location.hash = 'workspaces'
+        }}
+      />
+    )
   const hasPassword = ['login', 'register', 'reset-password'].includes(page)
   const tokenPage = page === 'confirm-email' || page === 'reset-password'
   if (!loading && account && !tokenPage)
@@ -190,6 +208,12 @@ export default function AccountShell() {
     )
   return (
     <main className="account-layout">
+      {invitation && (
+        <p role="status">
+          Connectez-vous avec l’adresse invitée, ou créez votre compte. Après confirmation de votre
+          adresse, rouvrez le lien d’invitation reçu par email.
+        </p>
+      )}
       <section className="account-story">
         <a className="account-brand" href="#login">
           REDEEMER<span>SocialFlow</span>

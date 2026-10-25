@@ -12,7 +12,7 @@ export function Dashboard({
   posts: Post[]
   open: (post: Post) => void
   navigate: (page: 'posts' | 'calendar', status?: Status) => void
-  create: () => void
+  create?: () => void
 }) {
   const count = (status: Status) => posts.filter((post) => post.status === status).length
   const upcoming = posts
@@ -59,9 +59,11 @@ export function Dashboard({
             <br />a clear plan.
           </h2>
           <p>Your content, your team’s next steps, one shared workspace.</p>
-          <button className="button dark" onClick={create}>
-            Start a new post <ArrowUpRight size={17} />
-          </button>
+          {create && (
+            <button className="button dark" onClick={create}>
+              Start a new post <ArrowUpRight size={17} />
+            </button>
+          )}
         </div>
         <div className="banner-art" aria-hidden="true">
           <div className="art-orbit" />
@@ -177,9 +179,11 @@ export function Dashboard({
           <EmptyState
             title="Your story starts here"
             action={
-              <button className="button" onClick={create}>
-                Create your first post
-              </button>
+              create && (
+                <button className="button" onClick={create}>
+                  Create your first post
+                </button>
+              )
             }
           >
             Save your first draft to start building your content library.

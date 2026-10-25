@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import {
   LayoutDashboard,
   CalendarDays,
@@ -58,7 +58,14 @@ function currentPage(): Page {
 export default function App({
   workspaceName = 'Redeemer Holding',
   localAdministration = true,
-}: { workspaceName?: string; localAdministration?: boolean } = {}) {
+  canEdit = true,
+  workspaceHeader,
+}: {
+  workspaceName?: string
+  localAdministration?: boolean
+  canEdit?: boolean
+  workspaceHeader?: ReactNode
+} = {}) {
   const [page, setPage] = useState<Page>(currentPage)
   const [posts, setPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
@@ -178,6 +185,7 @@ export default function App({
         </div>
       </aside>
       <div className="workspace">
+        {workspaceHeader}
         <header className="topbar">
           <span>
             Workspace <span className="breadcrumb-slash">/</span>{' '}
@@ -209,7 +217,7 @@ export default function App({
               >
                 <RefreshCw size={18} />
               </button>
-              {page !== 'trash' && (
+              {canEdit && page !== 'trash' && (
                 <button className="button primary" onClick={() => setEditor({})}>
                   <Plus size={18} />
                   Create post
@@ -240,7 +248,7 @@ export default function App({
             <Posts
               key={`posts-${initialStatus ?? 'all'}`}
               open={setSelected}
-              create={() => setEditor({})}
+              create={canEdit ? () => setEditor({}) : undefined}
               initialStatus={initialStatus}
               revision={revision}
             />
@@ -256,7 +264,7 @@ export default function App({
               posts={posts}
               open={setSelected}
               navigate={navigate}
-              create={() => setEditor({})}
+              create={canEdit ? () => setEditor({}) : undefined}
             />
           ) : (
             <Calendar posts={posts} open={setSelected} />
@@ -281,7 +289,7 @@ export default function App({
           }}
         />
       )}
-      {editor && (
+      {canEdit && editor && (
         <PostEditor
           localAdministration={localAdministration}
           post={editor.post}
@@ -298,6 +306,7 @@ export default function App({
       )}{' '}
       {!editor && selected && (
         <PostDetails
+          canEdit={canEdit}
           localAdministration={localAdministration}
           key={selected.id}
           post={selected}

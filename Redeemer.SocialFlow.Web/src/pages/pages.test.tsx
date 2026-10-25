@@ -10,6 +10,37 @@ import { dateBoundary, dayKey } from '../lib/dates'
 import App from '../App'
 
 describe('workspace screens', () => {
+  it('places the workspace selector in the content column alongside the sidebar', async () => {
+    vi.spyOn(postsApi, 'list').mockResolvedValue([])
+    const { container } = render(
+      <App
+        localAdministration={false}
+        workspaceHeader={
+          <header>
+            <select aria-label="Espace actif">
+              <option>Studio</option>
+            </select>
+          </header>
+        }
+      />,
+    )
+    await screen.findByRole('combobox', { name: 'Espace actif' })
+    expect(container.querySelector('.workspace')).toContainElement(screen.getByRole('combobox'))
+    expect(container.querySelector('.sidebar')).not.toContainElement(screen.getByRole('combobox'))
+    expect(container.querySelector('.workspace > header + .topbar')).toBeInTheDocument()
+  })
+  it('shows no creation actions to a Viewer in an empty workspace', async () => {
+    location.hash = 'dashboard'
+    vi.spyOn(postsApi, 'list').mockResolvedValue([])
+    render(<App workspaceName="Viewer workspace" localAdministration={false} canEdit={false} />)
+    await screen.findByText('Your story starts here')
+    expect(
+      screen.queryByRole('button', { name: /Create|Start a new post/ }),
+    ).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('link', { name: 'Posts' }))
+    await screen.findByText('Your next story starts here')
+    expect(screen.queryByRole('button', { name: /Create/ })).not.toBeInTheDocument()
+  })
   it('shows real workflow counts and only future scheduled posts in upcoming', () => {
     const posts = [
       post(),

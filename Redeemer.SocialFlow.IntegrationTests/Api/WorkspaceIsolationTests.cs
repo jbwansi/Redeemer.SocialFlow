@@ -24,7 +24,7 @@ using Xunit;
 
 namespace Redeemer.SocialFlow.IntegrationTests.Api;
 
-public sealed class WorkspaceIsolationTests : IAsyncLifetime
+public sealed partial class WorkspaceIsolationTests : IAsyncLifetime
 {
     private readonly string root = Path.Combine(Path.GetTempPath(), "socialflow-tenants-" + Guid.NewGuid().ToString("N"));
     private WebApplicationFactory<Program> factory = null!;
@@ -32,6 +32,7 @@ public sealed class WorkspaceIsolationTests : IAsyncLifetime
     private HttpClient alice = null!, bob = null!;
     private WorkspaceDto a = null!, b = null!;
     private string aliceId = "", bobId = "";
+    private readonly NoMail mailbox = new();
     private const string Password = "Password-For-Test-123!";
 
     public async Task InitializeAsync()
@@ -47,7 +48,7 @@ public sealed class WorkspaceIsolationTests : IAsyncLifetime
             .ConfigureServices(services =>
             {
                 services.RemoveAll<IDataProtectionProvider>(); services.AddSingleton<IDataProtectionProvider>(new EphemeralDataProtectionProvider());
-                services.RemoveAll<IAccountEmailSender>(); services.AddSingleton<IAccountEmailSender, NoMail>();
+                services.RemoveAll<IAccountEmailSender>(); services.AddSingleton<IAccountEmailSender>(mailbox);
             }));
         await using var scope = factory.Services.CreateAsyncScope();
         await scope.ServiceProvider.GetRequiredService<AccountDbContext>().Database.MigrateAsync();
@@ -110,7 +111,7 @@ public sealed class WorkspaceIsolationTests : IAsyncLifetime
         bob.DefaultRequestHeaders.Remove("X-Workspace-Id"); bob.DefaultRequestHeaders.Add("X-Workspace-Id", a.Id.ToString());
         Assert.Equal(HttpStatusCode.OK, (await bob.GetAsync("/api/posts")).StatusCode);
         var membership = await db.WorkspaceMemberships.SingleAsync(x => x.WorkspaceId == a.Id && x.UserId == bobId);
-        membership.Change(WorkspaceRole.Member, MembershipStatus.Inactive, 2); await db.SaveChangesAsync();
+        membership.Change(WorkspaceRole.Editor, MembershipStatus.Inactive, 2); await db.SaveChangesAsync();
         Assert.Equal(HttpStatusCode.Forbidden, (await bob.GetAsync("/api/posts")).StatusCode);
     }
 
@@ -260,17 +261,19 @@ public sealed class WorkspaceIsolationTests : IAsyncLifetime
     {
         await using var db = Db(a.Id);
         var member = await db.WorkspaceMemberships.SingleAsync(x => x.WorkspaceId == a.Id);
-        Assert.Throws<Redeemer.SocialFlow.Domain.Exceptions.DomainException>(() => member.Change(WorkspaceRole.Member, MembershipStatus.Active, 1));
+        Assert.Throws<Redeemer.SocialFlow.Domain.Exceptions.DomainException>(() => member.Change(WorkspaceRole.Editor, MembershipStatus.Active, 1));
         await Assert.ThrowsAsync<SqliteException>(() => db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM WorkspaceMemberships WHERE WorkspaceId={a.Id}"));
         await Assert.ThrowsAsync<SqliteException>(() => db.Database.ExecuteSqlInterpolatedAsync($"UPDATE WorkspaceMemberships SET Status=2 WHERE WorkspaceId={a.Id}"));
         db.WorkspaceMemberships.Add(WorkspaceMembership.Join(a.Id, bobId)); await db.SaveChangesAsync();
-        member.Change(WorkspaceRole.Member, MembershipStatus.Active, 2); await db.SaveChangesAsync();
+        member.Change(WorkspaceRole.Editor, MembershipStatus.Active, 2); await db.SaveChangesAsync();
         Assert.Equal(1, await db.WorkspaceMemberships.CountAsync(x => x.WorkspaceId == a.Id && x.Role == WorkspaceRole.Owner && x.Status == MembershipStatus.Active));
     }
 
     public async Task DisposeAsync() { alice.Dispose(); bob.Dispose(); await factory.DisposeAsync(); Directory.Delete(root, true); }
     private sealed class NoMail : IAccountEmailSender
     {
-        public Task SendAsync(string email, string purpose, string link, CancellationToken token) => Task.CompletedTask;
+        public List<string> Links { get; } = [];
+        public Task SendAsync(string email, string purpose, string link, CancellationToken token)
+        { Links.Add(link); return Task.CompletedTask; }
     }
 }

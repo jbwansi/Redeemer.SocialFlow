@@ -26,6 +26,7 @@ public sealed class WorkspaceMembershipConfiguration : IEntityTypeConfiguration<
         b.HasIndex(x => new { x.UserId, x.Status });
         b.Property(x => x.JoinedAtUtc).HasColumnType("TEXT");
         b.Property(x => x.Role).IsConcurrencyToken(); b.Property(x => x.Status).IsConcurrencyToken();
+        b.Property(x => x.Revision).IsConcurrencyToken();
         b.HasOne<Workspace>().WithMany().HasForeignKey(x => x.WorkspaceId).OnDelete(DeleteBehavior.Restrict);
     }
 }

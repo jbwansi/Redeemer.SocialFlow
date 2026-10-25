@@ -10,9 +10,28 @@ vi.mock('./api/accounts', async () => {
   return { ...actual, accountRequest: vi.fn() }
 })
 vi.mock('./App', () => ({ default: () => <div>Historical business data</div> }))
+vi.mock('./api/team', async () => ({
+  ...(await vi.importActual('./api/team')),
+  teamApi: { accept: vi.fn() },
+}))
 beforeEach(() => {
   history.replaceState(null, '', '/#login')
   vi.mocked(accountRequest).mockReset().mockRejectedValue(new AccountError(401, 'Session requise'))
+})
+
+it('keeps invitation acceptance available after login and removes the token from the address bar', async () => {
+  history.replaceState(null, '', '/#accept-invitation?code=private-invitation')
+  render(<AccountShell />)
+  await screen.findByRole('button', { name: 'Se connecter' })
+  expect(location.hash).not.toContain('private-invitation')
+  expect(screen.getByRole('status')).toHaveTextContent('rouvrez le lien')
+  await userEvent.type(screen.getByLabelText('Adresse email'), 'bob@example.test')
+  await userEvent.type(screen.getByLabelText('Mot de passe'), 'Test-Password-947!')
+  vi.mocked(accountRequest)
+    .mockResolvedValueOnce(undefined)
+    .mockResolvedValue({ id: 'bob', email: 'bob@example.test' })
+  await userEvent.click(screen.getByRole('button', { name: 'Se connecter' }))
+  expect(await screen.findByRole('button', { name: 'Accepter l’invitation' })).toBeInTheDocument()
 })
 
 it('protects business routes and displays login without loading historical data', async () => {

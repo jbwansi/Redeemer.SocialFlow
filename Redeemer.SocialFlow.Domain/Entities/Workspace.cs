@@ -4,7 +4,7 @@ namespace Redeemer.SocialFlow.Domain.Entities;
 
 public enum WorkspaceType { Personal = 1, Organization = 2 }
 public enum WorkspaceStatus { Active = 1, Suspended = 2 }
-public enum WorkspaceRole { Owner = 1, Member = 2 }
+public enum WorkspaceRole { Owner = 1, Editor = 2, Admin = 3, Viewer = 4 }
 public enum MembershipStatus { Active = 1, Inactive = 2 }
 
 public interface IWorkspaceResource { Guid WorkspaceId { get; } }
@@ -38,6 +38,7 @@ public sealed class WorkspaceMembership
     public WorkspaceRole Role { get; private set; }
     public MembershipStatus Status { get; private set; }
     public DateTimeOffset JoinedAtUtc { get; private set; }
+    public Guid Revision { get; private set; } = Guid.NewGuid();
     public static WorkspaceMembership Join(Guid workspaceId, string userId, WorkspaceRole role = WorkspaceRole.Owner, TimeProvider? clock = null)
     {
         if (workspaceId == Guid.Empty || string.IsNullOrWhiteSpace(userId) || userId.Length > 450 || !Enum.IsDefined(role))
@@ -51,6 +52,6 @@ public sealed class WorkspaceMembership
         if (Role == WorkspaceRole.Owner && Status == MembershipStatus.Active &&
             (role != WorkspaceRole.Owner || status != MembershipStatus.Active) && activeOwnerCount <= 1)
             throw new DomainException("The last active owner cannot be removed.");
-        Role = role; Status = status;
+        Role = role; Status = status; Revision = Guid.NewGuid();
     }
 }

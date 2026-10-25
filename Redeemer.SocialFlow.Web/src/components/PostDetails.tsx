@@ -23,6 +23,7 @@ export function PostDetails({
   warnings,
   references,
   localAdministration = true,
+  canEdit = true,
 }: {
   post: Post
   close: () => void
@@ -32,23 +33,26 @@ export function PostDetails({
   warnings?: string[]
   references?: KnowledgePassage[]
   localAdministration?: boolean
+  canEdit?: boolean
 }) {
   const [busy, setBusy] = useState(false)
   const deleting = useRef(false)
   const [error, setError] = useState<unknown>()
   const [date, setDate] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const editable = post.status === 1 || post.status === 6
-  const deletable = editable || post.status === 8
-  const actions: WorkflowAction[] = editable
-    ? ['submit-for-review']
-    : post.status === 2
-      ? ['approve', 'reject']
-      : post.status === 3
-        ? ['schedule']
-        : post.status === 4
-          ? ['cancel']
-          : []
+  const editable = canEdit && (post.status === 1 || post.status === 6)
+  const deletable = canEdit && (editable || post.status === 8)
+  const actions: WorkflowAction[] = !canEdit
+    ? []
+    : editable
+      ? ['submit-for-review']
+      : post.status === 2
+        ? ['approve', 'reject']
+        : post.status === 3
+          ? ['schedule']
+          : post.status === 4
+            ? ['cancel']
+            : []
   async function act(action: WorkflowAction) {
     setBusy(true)
     setError(undefined)
@@ -122,7 +126,7 @@ export function PostDetails({
             </span>
           )}
         </div>
-        {post.status === 3 && (
+        {canEdit && post.status === 3 && (
           <label>
             Schedule date and time
             <input

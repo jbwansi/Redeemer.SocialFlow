@@ -5,7 +5,8 @@ using Redeemer.SocialFlow.Domain.Entities;
 
 namespace Redeemer.SocialFlow.Api.Security;
 
-public sealed class WorkspaceRequirement : IAuthorizationRequirement { }
+public sealed class WorkspaceRequirement(WorkspacePermission permission = WorkspacePermission.Read) : IAuthorizationRequirement
+{ public WorkspacePermission Permission { get; } = permission; }
 public sealed class WorkspaceAuthorization(IHttpContextAccessor http, IWorkspaceDirectory directory, WorkspaceAccessContext access)
     : AuthorizationHandler<WorkspaceRequirement>
 {
@@ -22,7 +23,8 @@ public sealed class WorkspaceAuthorization(IHttpContextAccessor http, IWorkspace
         var userId = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (!request.IsHttps || userId is null || !request.Headers.TryGetValue("X-Workspace-Id", out var header) ||
             header.Count != 1 || !Guid.TryParse(header[0], out var id)) return;
-        if (await directory.GetAsync(userId, id, http.HttpContext!.RequestAborted) is null) return;
+        var member = await directory.GetAsync(userId, id, http.HttpContext!.RequestAborted);
+        if (member is null || !WorkspacePermissions.Allows(member.Role, requirement.Permission)) return;
         access.Bind(id); context.Succeed(requirement);
     }
 }

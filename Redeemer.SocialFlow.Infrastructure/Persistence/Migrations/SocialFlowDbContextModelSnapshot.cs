@@ -534,6 +534,66 @@ namespace Redeemer.SocialFlow.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Redeemer.SocialFlow.Domain.Entities.WorkspaceInvitation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(254)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("ExpiresAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("InvitedByUserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("NormalizedEmail")
+                        .IsRequired()
+                        .HasMaxLength(254)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Role")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .IsConcurrencyToken()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("WorkspaceId");
+
+                    b.HasIndex("WorkspaceId", "NormalizedEmail")
+                        .IsUnique()
+                        .HasFilter("Status = 1");
+
+                    b.ToTable("WorkspaceInvitations");
+                });
+
             modelBuilder.Entity("Redeemer.SocialFlow.Domain.Entities.WorkspaceMembership", b =>
                 {
                     b.Property<Guid>("WorkspaceId")
@@ -544,6 +604,10 @@ namespace Redeemer.SocialFlow.Infrastructure.Persistence.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<DateTimeOffset>("JoinedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("Revision")
+                        .IsConcurrencyToken()
                         .HasColumnType("TEXT");
 
                     b.Property<int>("Role")
@@ -684,6 +748,15 @@ namespace Redeemer.SocialFlow.Infrastructure.Persistence.Migrations
                         .HasForeignKey("WorkspaceId", "Id", "LogoId")
                         .HasPrincipalKey("WorkspaceId", "IdentityId", "Id")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Redeemer.SocialFlow.Domain.Entities.WorkspaceInvitation", b =>
+                {
+                    b.HasOne("Redeemer.SocialFlow.Domain.Entities.Workspace", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Redeemer.SocialFlow.Domain.Entities.WorkspaceMembership", b =>

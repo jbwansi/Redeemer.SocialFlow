@@ -50,6 +50,7 @@ public sealed class PostsController(ISocialPostService posts) : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Policy = "WorkspaceEdit")]
     [EndpointSummary("Create a draft post")]
     [ProducesResponseType<SocialPostDto>(StatusCodes.Status201Created)]
     public async Task<ActionResult<SocialPostDto>> Create([FromBody] CreatePostRequest request, CancellationToken cancellationToken)
@@ -80,6 +81,7 @@ public sealed class PostsController(ISocialPostService posts) : ControllerBase
         Ok(await posts.ListAsync(request, cancellationToken));
 
     [HttpPut("{id}")]
+    [Authorize(Policy = "WorkspaceEdit")]
     [EndpointSummary("Replace a draft or rejected post's editable fields")]
     [EndpointDescription("Null optional values clear those fields.")]
     [ProducesResponseType<SocialPostDto>(StatusCodes.Status200OK)]
@@ -87,6 +89,7 @@ public sealed class PostsController(ISocialPostService posts) : ControllerBase
         Ok(await posts.UpdateAsync(id, request, cancellationToken));
 
     [HttpDelete("{id}")]
+    [Authorize(Policy = "WorkspaceEdit")]
     [EndpointSummary("Soft-delete a draft, rejected or cancelled post")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
@@ -96,30 +99,35 @@ public sealed class PostsController(ISocialPostService posts) : ControllerBase
     }
 
     [HttpPost("{id}/submit-for-review")]
+    [Authorize(Policy = "WorkspaceEdit")]
     [EndpointSummary("Submit a post for review")]
     [ProducesResponseType<SocialPostDto>(StatusCodes.Status200OK)]
     public async Task<ActionResult<SocialPostDto>> SubmitForReview(Guid id, CancellationToken cancellationToken) =>
         Ok(await posts.SubmitForReviewAsync(id, cancellationToken));
 
     [HttpPost("{id}/approve")]
+    [Authorize(Policy = "WorkspaceApprove")]
     [EndpointSummary("Approve a post awaiting review")]
     [ProducesResponseType<SocialPostDto>(StatusCodes.Status200OK)]
     public async Task<ActionResult<SocialPostDto>> Approve(Guid id, CancellationToken cancellationToken) =>
         Ok(await posts.ApproveAsync(id, cancellationToken));
 
     [HttpPost("{id}/reject")]
+    [Authorize(Policy = "WorkspaceApprove")]
     [EndpointSummary("Reject a post awaiting review")]
     [ProducesResponseType<SocialPostDto>(StatusCodes.Status200OK)]
     public async Task<ActionResult<SocialPostDto>> Reject(Guid id, CancellationToken cancellationToken) =>
         Ok(await posts.RejectAsync(id, cancellationToken));
 
     [HttpPost("{id}/schedule")]
+    [Authorize(Policy = "WorkspaceEdit")]
     [EndpointSummary("Schedule an approved post for a future instant")]
     [ProducesResponseType<SocialPostDto>(StatusCodes.Status200OK)]
     public async Task<ActionResult<SocialPostDto>> Schedule(Guid id, [FromBody] SchedulePostRequest request, CancellationToken cancellationToken) =>
         Ok(await posts.ScheduleAsync(id, request, cancellationToken));
 
     [HttpPost("{id}/cancel")]
+    [Authorize(Policy = "WorkspaceEdit")]
     [EndpointSummary("Cancel a scheduled post")]
     [ProducesResponseType<SocialPostDto>(StatusCodes.Status200OK)]
     public async Task<ActionResult<SocialPostDto>> Cancel(Guid id, CancellationToken cancellationToken) =>

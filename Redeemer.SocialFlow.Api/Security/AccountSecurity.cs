@@ -72,6 +72,10 @@ public static class AccountSecurity
             options.AddPolicy("LocalAdministrationOnly", legacy);
             options.AddPolicy("WorkspaceMember", new AuthorizationPolicyBuilder(IdentityConstants.ApplicationScheme, LocalScheme)
                 .RequireAuthenticatedUser().AddRequirements(new WorkspaceRequirement()).Build());
+            options.AddPolicy("WorkspaceEdit", new AuthorizationPolicyBuilder(IdentityConstants.ApplicationScheme, LocalScheme)
+                .RequireAuthenticatedUser().AddRequirements(new WorkspaceRequirement(WorkspacePermission.Edit)).Build());
+            options.AddPolicy("WorkspaceApprove", new AuthorizationPolicyBuilder(IdentityConstants.ApplicationScheme, LocalScheme)
+                .RequireAuthenticatedUser().AddRequirements(new WorkspaceRequirement(WorkspacePermission.Approve)).Build());
             options.AddPolicy("AccountSession", new AuthorizationPolicyBuilder(IdentityConstants.ApplicationScheme)
                 .RequireAuthenticatedUser().Build());
         });
@@ -93,6 +97,8 @@ public static class AccountSecurity
         services.AddScoped<WorkspaceAccessContext>();
         services.AddScoped<IWorkspaceAccessContext>(p => p.GetRequiredService<WorkspaceAccessContext>());
         services.AddScoped<IWorkspaceDirectory, WorkspaceDirectory>();
+        services.AddScoped<ICollaborationActor, Redeemer.SocialFlow.Api.Controllers.HttpCollaborationActor>();
+        services.AddScoped<IWorkspaceCollaboration, WorkspaceCollaboration>();
         services.AddScoped<IAuthorizationHandler, WorkspaceAuthorization>();
         services.AddRateLimiter(options =>
         {

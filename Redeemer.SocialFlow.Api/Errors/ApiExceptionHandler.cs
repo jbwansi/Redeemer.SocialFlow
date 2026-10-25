@@ -13,6 +13,8 @@ public sealed class ApiExceptionHandler(IProblemDetailsService problems, ILogger
     {
         var (status, title, detail) = exception switch
         {
+            Redeemer.SocialFlow.Application.Accounts.CollaborationException e => (e.Status, "Collaboration", e.Message),
+            Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException => (409, "Conflit", "Les données ont changé. Rechargez la page."),
             PostNotFoundException => (404, "Post not found", exception.Message),
             KnowledgeDocumentNotFoundException => (404, "Knowledge document not found", exception.Message),
             DomainException => (400, "Domain validation failed", exception.Message),

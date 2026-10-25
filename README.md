@@ -7,6 +7,8 @@ Phase 1 account authentication is implemented. See [setup, first account and acc
 
 ## Local persistence
 
+Phase 3 adds organization teams, expiring email invitations and Owner/Admin/Editor/Viewer permissions. See [collaboration delivery and migration instructions](docs/phase-3-collaboration.md). With explicit user approval, its migration was applied to the local real database on 25 October 2026 after verified backups and a rehearsal. Existing data and Identity accounts were preserved.
+
 Phase 2 workspaces and tenant isolation are implemented. See [delivery, initialization and historical ownership](docs/phase-2-workspaces.md). With explicit user approval, the two migrations were applied to the local real business database on 25 October 2026 after verified backups and a rehearsal. Historical workspace ownership remains unassigned. Other installations must follow that guide and authorize migration before running the update command below.
 
 The API reads `ConnectionStrings:SocialFlow` from its `appsettings.json`, defaulting to

@@ -10,6 +10,7 @@ public sealed class SocialFlowDbContext(DbContextOptions<SocialFlowDbContext> op
 {
     public Guid? ActiveWorkspaceId => workspace?.WorkspaceId;
     public DbSet<Workspace> Workspaces => Set<Workspace>();
+    public DbSet<WorkspaceInvitation> WorkspaceInvitations => Set<WorkspaceInvitation>();
     public DbSet<WorkspaceMembership> WorkspaceMemberships => Set<WorkspaceMembership>();
     public DbSet<StoredVisualIdentity> VisualIdentities => Set<StoredVisualIdentity>();
     public DbSet<IdentityLogo> IdentityLogos => Set<IdentityLogo>();
@@ -32,6 +33,7 @@ public sealed class SocialFlowDbContext(DbContextOptions<SocialFlowDbContext> op
         Tenant<PostVisual>(modelBuilder);
         Tenant<StoredVisualIdentity>(modelBuilder);
         Tenant<IdentityLogo>(modelBuilder);
+        Tenant<WorkspaceInvitation>(modelBuilder);
     }
 
     private void Tenant<T>(ModelBuilder model) where T : class, IWorkspaceResource

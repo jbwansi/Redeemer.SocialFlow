@@ -56,6 +56,28 @@ describe('post editor', () => {
 })
 
 describe('workflow actions', () => {
+  it.each([1, 2, 3, 4, 6, 8] as Status[])(
+    'Viewer sees no editorial mutations for status %s',
+    (status) => {
+      render(
+        <PostDetails
+          post={post({ status })}
+          canEdit={false}
+          localAdministration={false}
+          close={vi.fn()}
+          edit={vi.fn()}
+          changed={vi.fn()}
+          removed={vi.fn()}
+        />,
+      )
+      expect(
+        screen.queryByRole('button', {
+          name: /Edit|Delete|Submit|Approve|Reject|Schedule|Cancel schedule/i,
+        }),
+      ).not.toBeInTheDocument()
+      expect(screen.queryByLabelText('Schedule date and time')).not.toBeInTheDocument()
+    },
+  )
   it.each([1, 2, 3, 4, 5, 6, 7, 8] as Status[])(
     'OK closes the modal without mutations for status %s',
     async (status) => {
