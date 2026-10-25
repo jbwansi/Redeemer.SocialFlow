@@ -3,6 +3,8 @@
 The Clean Architecture solution is `Redeemer.SocialFlow.slnx`. Its runnable host is
 `Redeemer.SocialFlow.Api`; the older `Redeemer.SocialFlow` web template is outside the solution.
 
+Phase 1 account authentication is implemented. See [setup, first account and access boundaries](docs/phase-1-authentication.md) and [delivery results](docs/phase-1-delivery.md). Accounts use a separate Identity database; ordinary users cannot access historical global data. Existing business migration commands below are not required to initialize accounts.
+
 ## Local persistence
 
 The API reads `ConnectionStrings:SocialFlow` from its `appsettings.json`, defaulting to
@@ -13,7 +15,7 @@ Local database files are ignored by Git.
 From the solution directory, with the .NET 10 SDK and `dotnet-ef` 10.0 installed:
 
 ```powershell
-dotnet ef database update --project Redeemer.SocialFlow.Infrastructure --startup-project Redeemer.SocialFlow.Api
+dotnet ef database update --context SocialFlowDbContext --project Redeemer.SocialFlow.Infrastructure --startup-project Redeemer.SocialFlow.Api
 dotnet run --project Redeemer.SocialFlow.Api
 ```
 

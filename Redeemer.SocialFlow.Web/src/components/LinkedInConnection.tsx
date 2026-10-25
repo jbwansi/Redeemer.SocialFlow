@@ -68,13 +68,18 @@ export function LinkedInConnection() {
             L’API doit rester en fonctionnement pour traiter les échéances.
           </p>
           {!runtime.publicationEnabled && <p>Publication LinkedIn désactivée côté serveur.</p>}
-          <a className="button" href={runtime.connectUrl} target="_blank" rel="noopener noreferrer">
+          <button
+            className="button"
+            onClick={() => {
+              linkedInApi
+                .connect()
+                .then(({ authorizeUrl }) => window.location.assign(authorizeUrl))
+                .catch(setError)
+            }}
+          >
             Connecter LinkedIn
-          </a>
-          <small>
-            Le parcours s’ouvre dans un nouvel onglet. Après connexion, revenez ici pour actualiser
-            le statut.
-          </small>
+          </button>
+          <small>Après connexion, vous reviendrez à l’accès administratif local.</small>
         </>
       )}
       <button

@@ -9,6 +9,20 @@ const route = new RegExp(
   '^/posts/(' + guid + ')/visuals(?:/(upload|generate|' + guid + ')(/select)?)?$',
 )
 export function allowedRoute(path: string, method: string): boolean {
+  const pathname = path.split('?')[0]
+  if (pathname === '/posts') return method === 'GET' || method === 'POST'
+  if (pathname === '/posts/trash') return method === 'GET'
+  if (pathname === '/posts/generate-draft') return method === 'POST'
+  const post = new RegExp(
+    '^/posts/' + guid + '(?:/(submit-for-review|approve|reject|schedule|cancel))?$',
+  ).exec(pathname)
+  if (post) return post[1] ? method === 'POST' : ['GET', 'PUT', 'DELETE'].includes(method)
+  if (path === '/dev/linkedin/connect-ticket') return method === 'POST'
+  if (/^\/dev\/linkedin\/(runtime|status)$/.test(path)) return method === 'GET'
+  const linkedin = new RegExp(
+    '^/dev/linkedin/posts/' + guid + '/(publication|preview|publish)$',
+  ).exec(path)
+  if (linkedin) return linkedin[1] === 'publish' ? method === 'POST' : method === 'GET'
   if (/^\/dev\/facebook\/(runtime|connect|page|disconnect)$/.test(path))
     return path.endsWith('/runtime') ? method === 'GET' : method === 'POST'
   const facebook = new RegExp(

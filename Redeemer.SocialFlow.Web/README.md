@@ -2,6 +2,8 @@
 
 React + TypeScript + Vite frontend for Redeemer Holding. Primary brand color: `#da2e29`.
 
+Account pages are served from the built SPA at `https://localhost:65474`; Vite offers the explicit local administration entry. Follow [Phase 1 setup](../docs/phase-1-authentication.md) for the separate Identity database, email confirmation and first account.
+
 ## Run locally
 
 For the Development-only LinkedIn workflow, follow the [single local test procedure](../docs/linkedin-v1-local.md). It uses HTTPS port 65474 and keeps the worker disabled by default.
@@ -21,7 +23,7 @@ the execution policy blocks `npm.ps1`.
 From the repository root, initialize the database and start the existing API:
 
 ```powershell
-dotnet ef database update --project Redeemer.SocialFlow.Infrastructure --startup-project Redeemer.SocialFlow.Api
+dotnet ef database update --context SocialFlowDbContext --project Redeemer.SocialFlow.Infrastructure --startup-project Redeemer.SocialFlow.Api
 dotnet run --project Redeemer.SocialFlow.Api --launch-profile Redeemer.SocialFlow.Api
 ```
 

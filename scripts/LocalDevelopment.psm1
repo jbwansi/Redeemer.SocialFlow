@@ -96,6 +96,9 @@ function New-LocalProcessInfo([string] $Executable, [string] $Arguments, [string
     # This local launcher never starts automatic publication, regardless of inherited settings.
     $info.EnvironmentVariables['Facebook__WorkerEnabled'] = 'false'
     $info.EnvironmentVariables['LinkedIn__WorkerEnabled'] = 'false'
+    $info.EnvironmentVariables['LocalAdministration__Enabled'] = 'true'
+    $info.EnvironmentVariables['Authentication__PublicOrigin'] = 'https://localhost:65474'
+    $info.EnvironmentVariables['Authentication__Email__UseLocalPickup'] = 'true'
     if ($info.EnvironmentVariables['NODE_TLS_REJECT_UNAUTHORIZED'] -eq '0') { throw 'TLS verification must not be disabled.' }
     return $info
 }

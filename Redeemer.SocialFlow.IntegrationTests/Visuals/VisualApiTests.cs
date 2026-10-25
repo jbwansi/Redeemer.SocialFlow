@@ -28,7 +28,7 @@ public sealed class VisualApiTests : IAsyncLifetime
 
     private WebApplicationFactory<Program> Factory(string environment = "Development", bool enabled = true,
         string? secret = Secret, bool local = true, bool allowHttp = false) =>
-        new WebApplicationFactory<Program>().WithWebHostBuilder(builder => builder
+        new Redeemer.SocialFlow.IntegrationTests.BusinessApiFactory().WithWebHostBuilder(builder => builder
             .UseEnvironment(environment)
             .UseSetting("LinkedIn:WorkerEnabled", "false")
             .UseSetting("LinkedIn:PublicationEnabled", "false")

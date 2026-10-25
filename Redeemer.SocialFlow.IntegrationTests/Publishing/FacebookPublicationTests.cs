@@ -37,7 +37,7 @@ public sealed class FacebookPublicationTests : IAsyncLifetime
     private HttpClient client = null!;
     private FacebookConnection connection = null!;
     private WebApplicationFactory<Program> Factory(string environment = "Development", bool enabled = true, bool local = true) =>
-        new WebApplicationFactory<Program>().WithWebHostBuilder(builder => builder.UseEnvironment(environment)
+        new Redeemer.SocialFlow.IntegrationTests.BusinessApiFactory().WithWebHostBuilder(builder => builder.UseEnvironment(environment)
             .ConfigureLogging(logging => logging.SetMinimumLevel(LogLevel.Trace).AddProvider(logs))
             .UseSetting("ConnectionStrings:SocialFlow", $"Data Source={Path.Combine(root,"test.db")};Pooling=False")
             .UseSetting("Facebook:Enabled", enabled.ToString()).UseSetting("Facebook:PublicationEnabled", "true")

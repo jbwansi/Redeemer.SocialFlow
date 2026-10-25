@@ -63,7 +63,7 @@ Aucune des activations/publications suivantes n'a été exécutée pendant l'imp
    dotnet user-secrets set "LinkedIn:PublicationEnabled" "true" --project .\Redeemer.SocialFlow.Api
    dotnet user-secrets set "LinkedIn:WorkerEnabled" "false" --project .\Redeemer.SocialFlow.Api
    $env:ConnectionStrings__SocialFlow = "Data Source=C:\CHEMIN_LOCAL\socialflow.db"
-   dotnet ef database update --project .\Redeemer.SocialFlow.Infrastructure --startup-project .\Redeemer.SocialFlow.Api
+   dotnet ef database update --context SocialFlowDbContext --project .\Redeemer.SocialFlow.Infrastructure --startup-project .\Redeemer.SocialFlow.Api
    dotnet dev-certs https --trust
    dotnet run --project .\Redeemer.SocialFlow.Api --launch-profile Redeemer.SocialFlow.Api
    ```

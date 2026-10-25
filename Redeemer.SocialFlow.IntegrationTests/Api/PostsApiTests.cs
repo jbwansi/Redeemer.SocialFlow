@@ -25,7 +25,7 @@ public sealed class PostsApiTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder => builder
+        _factory = new Redeemer.SocialFlow.IntegrationTests.BusinessApiFactory().WithWebHostBuilder(builder => builder
             .UseSetting("LinkedIn:WorkerEnabled", "false").UseEnvironment("Production")
             .UseSetting("ConnectionStrings:SocialFlow", $"Data Source={_path};Pooling=False"));
         await using var scope = _factory.Services.CreateAsyncScope();
@@ -235,7 +235,10 @@ public sealed class PostsApiTests : IAsyncLifetime
         using var client = development.CreateClient();
         using var document = JsonDocument.Parse(await client.GetStringAsync("/openapi/v1.json"));
         var paths = document.RootElement.GetProperty("paths");
-        Assert.Equal(26, paths.EnumerateObject().Sum(path => path.Value.EnumerateObject().Count()));
+        foreach (var action in new[] { "register", "login", "logout", "forgot-password", "reset-password", "confirm-email", "resend-confirmation" })
+            Assert.True(paths.GetProperty($"/api/auth/{action}").TryGetProperty("post", out _));
+        Assert.True(paths.GetProperty("/api/auth/me").TryGetProperty("get", out _));
+        Assert.True(paths.GetProperty("/api/auth/csrf").TryGetProperty("get", out _));
         Assert.True(paths.GetProperty("/api/dev/ai/generate-grounded").GetProperty("post").GetProperty("responses").TryGetProperty("200", out _));
         Assert.True(paths.GetProperty("/api/posts/trash").GetProperty("get").GetProperty("responses").TryGetProperty("200", out _));
         Assert.True(paths.GetProperty("/api/posts/generate-draft").GetProperty("post").GetProperty("responses").TryGetProperty("201", out _));

@@ -16,6 +16,16 @@ vi.mock('node:https', () => {
 beforeEach(() => vi.clearAllMocks())
 const id = '11111111-1111-1111-1111-111111111111'
 const path = '/posts/' + id + '/visuals'
+it('allows local editorial operations but never proxies account or OAuth callback routes', () => {
+  expect(allowedRoute('/posts?status=0', 'GET')).toBe(true)
+  expect(allowedRoute('/posts/' + id + '/approve', 'POST')).toBe(true)
+  expect(allowedRoute('/posts/' + id + '/approve', 'GET')).toBe(false)
+  expect(allowedRoute('/dev/linkedin/connect-ticket', 'POST')).toBe(true)
+  expect(allowedRoute('/dev/linkedin/connect', 'GET')).toBe(false)
+  expect(allowedRoute('/dev/linkedin/callback', 'GET')).toBe(false)
+  expect(allowedRoute('/auth/login', 'POST')).toBe(false)
+  expect(allowedRoute('/auth/me', 'GET')).toBe(false)
+})
 const servers: Server[] = []
 afterEach(async () => {
   await Promise.all(

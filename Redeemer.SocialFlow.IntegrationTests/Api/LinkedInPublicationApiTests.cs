@@ -27,7 +27,7 @@ public sealed class LinkedInPublicationApiTests : IAsyncLifetime
     private static string Route(Guid id, string action) => $"/api/dev/linkedin/posts/{id}/{action}";
     public async Task InitializeAsync()
     {
-        _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder => builder.UseEnvironment("Development")
+        _factory = new Redeemer.SocialFlow.IntegrationTests.BusinessApiFactory().WithWebHostBuilder(builder => builder.UseEnvironment("Development")
             .UseSetting("ConnectionStrings:SocialFlow", $"Data Source={_path};Pooling=False")
             .UseSetting("LinkedIn:PublicationEnabled", "true").UseSetting("LinkedIn:WorkerEnabled", "false")
             .ConfigureServices(services =>

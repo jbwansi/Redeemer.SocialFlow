@@ -10,6 +10,7 @@ vi.mock('../api/linkedin', async () => {
   return {
     ...actual,
     linkedInApi: {
+      connect: vi.fn(unavailable),
       runtime: vi.fn(unavailable),
       publication: vi.fn(unavailable),
       preview: vi.fn(unavailable),

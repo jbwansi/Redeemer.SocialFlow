@@ -1,4 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
+using Redeemer.SocialFlow.Api.Security;
+using Redeemer.SocialFlow.Api.Development.Facebook;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Options;
 using Redeemer.SocialFlow.Api.Development.LinkedIn;
@@ -16,9 +19,14 @@ public sealed class DevLinkedInController(LinkedInStateStore states, LinkedInTok
     private const string Cookie = "__Host-SocialFlow.LinkedIn.State";
     private static CookieOptions CookieSettings => new() { HttpOnly = true, Secure = true, SameSite = SameSiteMode.Lax, Path = "/", MaxAge = LinkedInStateStore.Lifetime };
 
-    [HttpGet("connect")]
-    public IActionResult Connect()
+    [HttpPost("connect-ticket")]
+    public IActionResult ConnectTicket([FromServices] LocalOAuthTickets tickets) =>
+        Ok(new { authorizeUrl = LinkedInOptions.Callback.Replace("/callback", "/connect") + "?ticket=" + Uri.EscapeDataString(tickets.Create()) });
+
+    [AllowAnonymous, HttpGet("connect")]
+    public IActionResult Connect([FromServices] LocalOAuthTickets tickets, [FromQuery] string? ticket)
     {
+        if (!FacebookFlows.LocalHttps(HttpContext) || !tickets.Consume(ticket)) return Unauthorized();
         Response.Headers["Referrer-Policy"] = "no-referrer";
         if (!Request.IsHttps) return Problem(statusCode: 400, title: "HTTPS is required.");
         if (!options.Value.IsConfigured)
@@ -39,12 +47,12 @@ public sealed class DevLinkedInController(LinkedInStateStore states, LinkedInTok
         catch (Exception) { return Problem(statusCode: 503, title: "LinkedIn connection could not be started."); }
     }
 
-    [HttpGet("callback")]
+    [AllowAnonymous, HttpGet("callback")]
     public async Task<IActionResult> Callback([FromQuery] string? state, [FromQuery] string? code,
         [FromQuery] string? error, CancellationToken cancellationToken)
     {
         Response.Headers["Referrer-Policy"] = "no-referrer";
-        if (!Request.IsHttps || !states.TryConsume(state, Request.Cookies[Cookie]))
+        if (!FacebookFlows.LocalHttps(HttpContext) || !states.TryConsume(state, Request.Cookies[Cookie]))
             return Problem(statusCode: 401, title: "Invalid or expired LinkedIn state. Start a new connection.");
         Response.Cookies.Delete(Cookie, CookieSettings);
         if (error is not null) return Problem(statusCode: 400, title: "LinkedIn authorization was refused or could not be completed.");
@@ -61,7 +69,7 @@ public sealed class DevLinkedInController(LinkedInStateStore states, LinkedInTok
             storing = true;
             await tokens.SaveAsync(connection, cancellationToken);
             // Clear the code/state from the displayed URL. No provider data enters the redirect.
-            return Redirect("/api/dev/linkedin/status");
+            return Redirect("http://localhost:5173/#local");
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { return StatusCode(499); }
         catch (Exception exception)

@@ -32,6 +32,7 @@ export interface PublicationPreview {
 }
 const base = '/dev/linkedin'
 export const linkedInApi = {
+  connect: () => apiRequest<{ authorizeUrl: string }>(`${base}/connect-ticket`, { method: 'POST' }),
   runtime: (signal?: AbortSignal) => apiRequest<LinkedInRuntime>(`${base}/runtime`, { signal }),
   publication: (id: string, signal?: AbortSignal) =>
     apiRequest<PublicationView>(`${base}/posts/${encodeURIComponent(id)}/publication`, { signal }),

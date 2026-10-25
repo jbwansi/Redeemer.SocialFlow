@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Options;
 using Redeemer.SocialFlow.Api.Development.Facebook;
@@ -13,7 +14,7 @@ public sealed class FacebookOAuthController(FacebookFlows flows, FacebookGraphCl
 {
     private const string Cookie = "__Host-SocialFlow.Facebook.State";
     private static CookieOptions CookieOptions => new() { HttpOnly = true, Secure = true, SameSite = SameSiteMode.Lax, Path = "/", MaxAge = LinkedInStateStore.Lifetime };
-    [HttpGet("authorize")]
+    [AllowAnonymous, HttpGet("authorize")]
     public IActionResult Authorize([FromQuery] string? ticket)
     {
         Response.Headers["Referrer-Policy"] = "no-referrer";
@@ -29,7 +30,7 @@ public sealed class FacebookOAuthController(FacebookFlows flows, FacebookGraphCl
         else parameters["scope"] = string.Join(',', FacebookOptions.RequiredScopes);
         return Redirect(QueryHelpers.AddQueryString("https://www.facebook.com/" + FacebookOptions.Version + "/dialog/oauth", parameters));
     }
-    [HttpGet("callback")]
+    [AllowAnonymous, HttpGet("callback")]
     public async Task<IActionResult> Callback([FromQuery] string? state, [FromQuery] string? code, [FromQuery] string? error, CancellationToken token)
     {
         Response.Headers["Referrer-Policy"] = "no-referrer";
@@ -53,6 +54,6 @@ public sealed class FacebookOAuthController(FacebookFlows flows, FacebookGraphCl
             return Problem(statusCode:502, title:"Connexion Facebook impossible. Consultez le diagnostic OAuth dans la sortie de l’API puis reconnectez-vous.");
         }
         // Fixed local landing page; no token, code, external error or state in the destination.
-        return Redirect("http://localhost:5173/#posts");
+        return Redirect("http://localhost:5173/#local");
     }
 }

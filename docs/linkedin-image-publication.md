@@ -67,7 +67,7 @@ La migration a été générée et testée uniquement sur des bases temporaires.
 Avant de lancer cette version sur la base active : arrêter l'application/worker, sauvegarder
 SQLite et le stockage privé, puis appliquer volontairement la migration depuis la racine :
 
-    dotnet ef database update 20261010021112_AddPublicationVisualSnapshot --project Redeemer.SocialFlow.Infrastructure --startup-project Redeemer.SocialFlow.Api
+    dotnet ef database update 20261010021112_AddPublicationVisualSnapshot --context SocialFlowDbContext --project Redeemer.SocialFlow.Infrastructure --startup-project Redeemer.SocialFlow.Api
 
 Cette commande n'a PAS été exécutée sur la base active pendant cette phase.
 La configuration existante LinkedIn:PublicationEnabled et LinkedIn:WorkerEnabled reste nécessaire.

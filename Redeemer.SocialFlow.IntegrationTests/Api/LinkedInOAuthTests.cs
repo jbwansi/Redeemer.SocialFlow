@@ -2,6 +2,8 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Builder;
+using Redeemer.SocialFlow.Api.Security;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
@@ -25,11 +27,12 @@ public sealed class LinkedInOAuthTests : IAsyncLifetime
     private WebApplicationFactory<Program> _factory = null!;
     private HttpClient _client = null!;
     private WebApplicationFactory<Program> Factory(string environment = "Development") =>
-        new WebApplicationFactory<Program>().WithWebHostBuilder(builder => builder
+        new Redeemer.SocialFlow.IntegrationTests.BusinessApiFactory().WithWebHostBuilder(builder => builder
             .UseSetting("LinkedIn:WorkerEnabled", "false").UseEnvironment(environment)
             .ConfigureLogging(logging => { logging.SetMinimumLevel(LogLevel.Trace); logging.AddProvider(_logs); })
             .ConfigureServices(services =>
             {
+                services.AddSingleton<IStartupFilter, LoopbackAddress>();
                 services.Configure<LinkedInOptions>(options =>
                 { options.ClientId = "fake-client-id"; options.ClientSecret = Secret; options.StorageDirectory = _directory; });
                 services.AddSingleton<TimeProvider>(_clock);
@@ -47,7 +50,8 @@ public sealed class LinkedInOAuthTests : IAsyncLifetime
     }
     private async Task<(string State, string Cookie)> Connect()
     {
-        using var response = await _client.GetAsync(Prefix + "/connect");
+        var ticket = _factory.Services.GetRequiredService<LocalOAuthTickets>().Create();
+        using var response = await _client.GetAsync(Prefix + "/connect?ticket=" + Uri.EscapeDataString(ticket));
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
         var uri = response.Headers.Location!;
         Assert.Equal("https://www.linkedin.com/oauth/v2/authorization", uri.GetLeftPart(UriPartial.Path));
@@ -81,7 +85,7 @@ public sealed class LinkedInOAuthTests : IAsyncLifetime
         var flow = await Connect();
         using var callback = await Callback(flow.State, flow.Cookie);
         Assert.Equal(HttpStatusCode.Redirect, callback.StatusCode);
-        Assert.Equal(Prefix + "/status", callback.Headers.Location!.ToString());
+        Assert.Equal("http://localhost:5173/#local", callback.Headers.Location!.ToString());
         Assert.Equal(2, _provider.Calls);
         var saved = await _factory.Services.GetRequiredService<LinkedInTokenStore>().ReadAsync(default);
         Assert.Equal(Token, saved!.AccessToken);
@@ -213,12 +217,13 @@ public sealed class LinkedInOAuthTests : IAsyncLifetime
         await using var factory = _factory.WithWebHostBuilder(builder => builder.ConfigureServices(services =>
             services.Configure<LinkedInOptions>(options => options.ClientSecret = "")));
         using var client = Client(factory);
-        using var response = await client.GetAsync(Prefix + "/connect");
+        var ticket = factory.Services.GetRequiredService<LocalOAuthTickets>().Create();
+        using var response = await client.GetAsync(Prefix + "/connect?ticket=" + Uri.EscapeDataString(ticket));
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
         Assert.Contains(_logs.Messages, message => message == "LinkedIn OAuth: Stage=Configuration ExceptionType=None HttpStatus=(null) DiagnosticCode=LI_CONFIG_MISSING");
         AssertNoSensitiveLogs();
         using var insecure = await _client.GetAsync("http://localhost:65475" + Prefix + "/connect");
-        Assert.Equal(HttpStatusCode.BadRequest, insecure.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, insecure.StatusCode);
         Assert.Equal("disconnected", (await _client.GetFromJsonAsync<LinkedInConnectionStatus>(Prefix + "/status"))!.State);
     }
 
@@ -338,6 +343,14 @@ public sealed class LinkedInOAuthTests : IAsyncLifetime
     private sealed class ProviderProxy(Provider provider) : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) => provider.Send(request, cancellationToken);
+    }
+    private sealed class LoopbackAddress : IStartupFilter
+    {
+        public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
+        {
+            app.Use((context, nextRequest) => { context.Connection.RemoteIpAddress = IPAddress.Loopback; return nextRequest(context); });
+            next(app);
+        };
     }
     private sealed class Clock : TimeProvider
     {

@@ -34,7 +34,7 @@ public sealed class LinkedInImagePublicationTests : IAsyncLifetime
     public async Task InitializeAsync()
     {
         Directory.CreateDirectory(_root);
-        _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder => builder.UseEnvironment("Development")
+        _factory = new Redeemer.SocialFlow.IntegrationTests.BusinessApiFactory().WithWebHostBuilder(builder => builder.UseEnvironment("Development")
             .UseSetting("ConnectionStrings:SocialFlow", $"Data Source={Path.Combine(_root, "test.db")};Pooling=False")
             .UseSetting("LinkedIn:PublicationEnabled", "true").UseSetting("LinkedIn:WorkerEnabled", "false")
             // Exercise LinkedIn through the shared router with Facebook enabled too.

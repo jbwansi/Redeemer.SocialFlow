@@ -2,6 +2,8 @@
 
 Depuis la racine du depot, avec Windows PowerShell 5.1, .NET 10 et Node/npm installes.
 
+Depuis la phase 1, les comptes utilisent la SPA compilée sur `https://localhost:65474` et une base Identity séparée à initialiser manuellement. Voir [authentification et premier compte](phase-1-authentication.md). Sur Vite, cliquer **Administration locale** pour accéder aux fonctionnalités historiques. Le lanceur active cet accès et la boîte mail locale ; il ne crée ni compte ni base de données.
+
 ## Premiere initialisation
 
 Installer une fois les dependances frontend : `npm --prefix Redeemer.SocialFlow.Web ci`.

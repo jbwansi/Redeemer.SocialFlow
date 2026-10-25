@@ -103,6 +103,10 @@ export class ApiError extends Error {
   }
 }
 const baseUrl = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '')
+let localAdministration = false
+export function setLocalAdministration(enabled: boolean) {
+  localAdministration = enabled
+}
 export async function apiRequest<T>(
   path: string,
   options: RequestInit = {},
@@ -110,10 +114,12 @@ export async function apiRequest<T>(
 ): Promise<T> {
   let response: Response
   try {
-    response = await fetch(`${transport.baseUrl ?? baseUrl}${path}`, {
+    const local = localAdministration && !transport.baseUrl
+    response = await fetch(`${transport.baseUrl ?? (local ? '/local-visuals' : baseUrl)}${path}`, {
       ...options,
       headers: {
         Accept: 'application/json, application/problem+json',
+        ...(local ? { 'X-SocialFlow-Local': '1' } : {}),
         ...(options.body && !(options.body instanceof FormData)
           ? { 'Content-Type': 'application/json' }
           : {}),

@@ -53,11 +53,12 @@ beforeEach(() => {
 })
 
 describe('LinkedIn connection', () => {
-  it('uses a browser navigation link and refreshes after returning; shows expiration and worker state', async () => {
+  it('requests an authorized connection ticket and refreshes on focus', async () => {
     render(<LinkedInConnection />)
-    const link = await screen.findByRole('link', { name: 'Connecter LinkedIn' })
-    expect(link).toHaveAttribute('href', runtime.connectUrl)
-    expect(link).toHaveAttribute('target', '_blank')
+    const button = await screen.findByRole('button', { name: 'Connecter LinkedIn' })
+    vi.mocked(linkedInApi.connect).mockRejectedValue(new Error('Ticket unavailable'))
+    await userEvent.click(button)
+    expect(linkedInApi.connect).toHaveBeenCalled()
     expect(screen.getByText(/Expiration/)).toBeInTheDocument()
     expect(screen.getByText(/Publication automatique désactivée/)).toHaveTextContent(
       'L’API doit rester en fonctionnement',

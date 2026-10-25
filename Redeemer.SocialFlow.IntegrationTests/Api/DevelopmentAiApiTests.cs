@@ -30,7 +30,7 @@ public sealed class DevelopmentAiApiTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder => builder
+        _factory = new Redeemer.SocialFlow.IntegrationTests.BusinessApiFactory().WithWebHostBuilder(builder => builder
             .UseSetting("LinkedIn:WorkerEnabled", "false").UseEnvironment("Development")
             .UseSetting("ConnectionStrings:SocialFlow", $"Data Source={_path};Pooling=False")
             .ConfigureLogging(logging => logging.AddProvider(_logs))

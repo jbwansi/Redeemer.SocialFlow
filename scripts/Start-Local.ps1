@@ -44,7 +44,8 @@ try {
     $web = [Diagnostics.Process]::Start($webInfo)
     $pumps += @(New-LocalOutputPump $web 'Vite')
     Write-Host "API launcher PID: $($api.Id). dotnet run builds current sources before starting (no --no-build)."
-    Write-Host 'API: https://localhost:65474 | Frontend: http://127.0.0.1:5173'
+    Write-Host 'Accounts (built SPA): https://localhost:65474 | Local administration: http://127.0.0.1:5173'
+    Write-Host 'Accounts require a manually initialized separate Identity database. No migration runs at startup.'
     Write-Host 'Automatic publication disabled. Keep this terminal open; Ctrl+C stops both servers.'
     while (!$api.HasExited -and !$web.HasExited) {
         Receive-LocalOutput $pumps
