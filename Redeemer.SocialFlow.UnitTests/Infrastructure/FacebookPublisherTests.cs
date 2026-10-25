@@ -64,7 +64,7 @@ public sealed class FacebookPublisherTests
         var before=DateTimeOffset.UtcNow;
         var connection=await new FacebookGraphClient(http,Options(),TimeProvider.System).ExchangeAsync("code",default);
         Assert.Equal(2,handler.Exchanges);
-        Assert.InRange(connection.ExpiresAt,before.AddSeconds(5184000),DateTimeOffset.UtcNow.AddSeconds(5184000));
+        Assert.InRange(connection.ExpiresAt!.Value,before.AddSeconds(5184000),DateTimeOffset.UtcNow.AddSeconds(5184000));
     }
     [Theory]
     [InlineData("{}",null,1)]
@@ -89,7 +89,7 @@ public sealed class FacebookPublisherTests
         using var handler=new Handler { FinalToken="{\"access_token\":\"user-secret\","+fields+"}" };
         using var http=new HttpClient(handler);var before=DateTimeOffset.UtcNow;
         var grant=await new FacebookGraphClient(http,Options(),TimeProvider.System).ExchangeAsync("code",default);
-        Assert.InRange(grant.ExpiresAt,before.AddSeconds(seconds),DateTimeOffset.UtcNow.AddSeconds(seconds));
+        Assert.InRange(grant.ExpiresAt!.Value,before.AddSeconds(seconds),DateTimeOffset.UtcNow.AddSeconds(seconds));
         Assert.Equal(2,handler.Exchanges);
     }
     [Theory]
@@ -115,9 +115,39 @@ public sealed class FacebookPublisherTests
         var pages=await new FacebookGraphClient(http,Options(),TimeProvider.System).PagesAsync("user-secret",default);
         Assert.Single(pages);Assert.Equal(2,handler.PageReads);Assert.All(handler.Hosts,h=>Assert.Equal("graph.facebook.com",h));
     }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task UnknownExpiryRequiresFreshVerificationForEveryPublication(bool failVerification)
+    {
+        using var handler = new Handler { DebugFailure = failVerification };
+        using var http = new HttpClient(handler);
+        var store = new Store { Expiry = null };
+        var result = await Publisher(http, store).PublishAsync(Request(false));
+        Assert.Equal(failVerification ? PostPublicationOutcome.Failed : PostPublicationOutcome.Confirmed, result.Outcome);
+        Assert.Equal(failVerification ? 0 : 1, handler.Writes);
+        handler.DebugFailure = true;
+        Assert.Equal(PostPublicationOutcome.Failed, (await Publisher(http, store).PublishAsync(Request(false))).Outcome);
+        Assert.Equal(failVerification ? 0 : 1, handler.Writes);
+    }
+    [Theory]
+    [InlineData("{\"is_valid\":false,\"app_id\":\"42\",\"type\":\"USER\",\"expires_at\":0}")]
+    [InlineData("{\"is_valid\":true,\"app_id\":\"43\",\"type\":\"USER\",\"expires_at\":0}")]
+    [InlineData("{\"is_valid\":true,\"app_id\":\"42\",\"type\":\"PAGE\",\"expires_at\":0}")]
+    [InlineData("{\"is_valid\":true,\"app_id\":\"42\",\"expires_at\":0}")]
+    [InlineData("{\"is_valid\":true,\"app_id\":\"42\",\"type\":\"USER\"}")]
+    [InlineData("{\"is_valid\":true,\"app_id\":\"42\",\"type\":\"USER\",\"expires_at\":1}")]
+    [InlineData("{\"is_valid\":true,\"app_id\":\"42\",\"type\":\"USER\",\"expires_at\":0,\"data_access_expires_at\":1}")]
+    public async Task UnverifiableGrantNeverSendsPublication(string metadata)
+    {
+        using var handler = new Handler { DebugResponse = "{\"data\":" + metadata + "}" };
+        using var http = new HttpClient(handler);
+        Assert.Equal(PostPublicationOutcome.Failed, (await Publisher(http, new Store { Expiry = null }).PublishAsync(Request(false))).Outcome);
+        Assert.Equal(0, handler.Writes);
+    }
     private sealed class Store:IFacebookConnectionStore
     {
-        public DateTimeOffset Expiry=DateTimeOffset.UtcNow.AddDays(2);
+        public DateTimeOffset? Expiry=DateTimeOffset.UtcNow.AddDays(2);
         public Task<FacebookConnection?> ReadAsync(CancellationToken token=default)=>Task.FromResult<FacebookConnection?>(new() {AppId="42",UserToken="user-secret",ExpiresAt=Expiry,Scopes=FacebookOptions.RequiredScopes,SelectedPageId="123",Pages=[new() {Id="123",Name="Page",AccessToken="page-secret",Tasks=["CREATE_CONTENT"]}]});
         public Task SaveAsync(FacebookConnection c,CancellationToken token=default)=>throw new NotSupportedException();
         public Task SelectAsync(Guid c,string p,CancellationToken token=default)=>throw new NotSupportedException();
@@ -132,13 +162,14 @@ public sealed class FacebookPublisherTests
     private sealed class FakePublisher:IPostPublisher { public int Calls; public Task<PostPublicationResult> PublishAsync(PostPublicationRequest r,CancellationToken cancellationToken=default) {Calls++;return Task.FromResult(PostPublicationResult.Confirmed("1"));} }
     private sealed class Handler:HttpMessageHandler
     {
-        public string? FirstToken,FinalToken;
+        public string? FirstToken,FinalToken,DebugResponse; public bool DebugFailure;
         public int Writes,Exchanges,PageReads,Status=200;public string Result="{\"id\":\"123_789\",\"post_id\":\"123_789\"}",Task="CREATE_CONTENT",Body="",Message="";
         public byte[]? Upload;public bool MissingPermission,Paginate;public List<string> Hosts=[];
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage r,CancellationToken token)
         {
             Hosts.Add(r.RequestUri!.Host);var path=r.RequestUri.AbsolutePath;
             if(path.EndsWith("/oauth/access_token")) {Exchanges++;return Json(200,(Exchanges==1?FirstToken:FinalToken)??"{\"access_token\":\"user-secret\",\"expires_in\":5184000}");}
+            if(path.EndsWith("/debug_token")) { if (DebugFailure) throw new HttpRequestException("private-network"); return Json(200, DebugResponse ?? (Exchanges > 0 ? "{\"data\":{\"is_valid\":true,\"app_id\":\"42\",\"type\":\"USER\"}}" : "{\"data\":{\"is_valid\":true,\"app_id\":\"42\",\"type\":\"USER\",\"expires_at\":0}}")); }
             if(path.EndsWith("/permissions")) return Json(200,JsonSerializer.Serialize(new {data=(MissingPermission?new[]{"pages_show_list"}:FacebookOptions.RequiredScopes).Select(p=>new {permission=p,status="granted"})}));
             if(path.EndsWith("/accounts")) {
                 PageReads++;return Json(200,JsonSerializer.Serialize(new {data=new[]{new{id="123",name="Page",access_token="page-secret",tasks=new[]{Task}}},paging=Paginate&&PageReads==1?(object)new {next="https://attacker.example/steal",cursors=new{after="cursor"}}:null}));

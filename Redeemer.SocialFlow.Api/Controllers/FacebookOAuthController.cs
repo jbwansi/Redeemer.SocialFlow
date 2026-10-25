@@ -19,10 +19,15 @@ public sealed class FacebookOAuthController(FacebookFlows flows, FacebookGraphCl
         Response.Headers["Referrer-Policy"] = "no-referrer";
         if (!FacebookFlows.LocalHttps(HttpContext)) return StatusCode(403);
         if (!options.Value.Configured || !flows.ConsumeTicket(ticket)) return Unauthorized();
+        var business = options.Value.LoginConfigId is not null;
+        logger.LogInformation("Facebook OAuth authorization: Stage=authorize; AuthorizationFlow={AuthorizationFlow}; ConfigIdPresent={ConfigIdPresent}", business ? "business_configuration" : "scope_based", business);
         var flow = flows.States.Create(); Response.Cookies.Append(Cookie, flow.Browser, CookieOptions);
-        return Redirect(QueryHelpers.AddQueryString("https://www.facebook.com/" + FacebookOptions.Version + "/dialog/oauth", new Dictionary<string,string?> {
+        var parameters = new Dictionary<string,string?> {
             ["client_id"] = options.Value.AppId, ["redirect_uri"] = FacebookOptions.Callback,
-            ["response_type"] = "code", ["scope"] = string.Join(',',FacebookOptions.RequiredScopes), ["state"] = flow.State }));
+            ["response_type"] = "code", ["state"] = flow.State };
+        if (business) parameters["config_id"] = options.Value.LoginConfigId;
+        else parameters["scope"] = string.Join(',', FacebookOptions.RequiredScopes);
+        return Redirect(QueryHelpers.AddQueryString("https://www.facebook.com/" + FacebookOptions.Version + "/dialog/oauth", parameters));
     }
     [HttpGet("callback")]
     public async Task<IActionResult> Callback([FromQuery] string? state, [FromQuery] string? code, [FromQuery] string? error, CancellationToken token)
@@ -36,13 +41,15 @@ public sealed class FacebookOAuthController(FacebookFlows flows, FacebookGraphCl
         try
         {
             var connection = await graph.ExchangeAsync(code, token);
+            logger.LogInformation("Facebook OAuth: Stage=meta_oauth; OAuthCompleted=true; PagesCount={PagesCount}", connection.Pages.Length);
             stage = "local_storage";
             await connections.SaveAsync(connection, token);
+            logger.LogInformation("Facebook OAuth: Stage=local_storage; ConnectionPersisted=true; PagesCount={PagesCount}", connection.Pages.Length);
         }
         catch (Exception failure)
         {
             var category = stage == "local_storage" ? "storage" : FacebookGraphClient.FailureCategory(failure, token);
-            logger.LogWarning("Facebook callback failed: Stage={Stage}; Category={Category}", stage, category);
+            logger.LogWarning("Facebook callback failed: Stage={Stage}; Category={Category}; ExceptionType={ExceptionType}", stage, category, failure.GetType().Name);
             return Problem(statusCode:502, title:"Connexion Facebook impossible. Consultez le diagnostic OAuth dans la sortie de l’API puis reconnectez-vous.");
         }
         // Fixed local landing page; no token, code, external error or state in the destination.

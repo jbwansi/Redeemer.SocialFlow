@@ -45,6 +45,8 @@ Open `http://127.0.0.1:5173`. Vite proxies `/api` to `https://127.0.0.1:65474`, 
 backend CORS changes are required. Copy `.env.example` to `.env.local` to override
 `API_PROXY_TARGET`. Restart Vite after changing environment variables.
 
+For the persistent, protected Windows configuration and a single command starting both API and Vite, see [Local development](../docs/local-development.md). The HTTPS API proxy validates the certificate; use this launcher to provide Node with the public ASP.NET Core development certificate.
+
 ## Features
 
 - Dashboard: all workflow counts, future scheduled posts, and recently updated posts.

@@ -19,9 +19,9 @@ export default defineConfig(({ mode }) => {
       strictPort: true,
       proxy: {
         '/api': {
-          target: env.API_PROXY_TARGET || 'https://127.0.0.1:65474',
+          target: env.API_PROXY_TARGET || 'https://localhost:65474',
           changeOrigin: true,
-          secure: false,
+          secure: true,
         },
       },
     },

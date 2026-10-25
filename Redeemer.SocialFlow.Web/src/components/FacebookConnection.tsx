@@ -19,6 +19,7 @@ export function FacebookConnection() {
         if (controller.signal.aborted) return
         setUnavailable(false)
         setRuntime(value)
+        console.info('[Facebook] FrontendPagesCount=%d', value.pages?.length ?? 0)
         setPage(value.destination || '')
         setError(undefined)
       })
@@ -76,7 +77,13 @@ export function FacebookConnection() {
               ? `Connecté à la Page ${runtime.destination}`
               : runtime.state === 'expired'
                 ? 'Connexion Facebook expirée. Reconnectez-vous.'
-                : 'Sélectionnez une Page après connexion à Facebook.'}
+                : runtime.state === 'verification-required'
+                  ? 'Connexion Facebook à revérifier. Actualisez ou reconnectez-vous avant de publier.'
+                  : runtime.connectionId
+                    ? (runtime.pages?.length ?? 0) === 0
+                      ? 'Compte Facebook connecté. Aucune Page accessible pour la publication.'
+                      : 'Compte Facebook connecté. Sélectionnez une Page de destination.'
+                    : 'Connectez votre compte Facebook pour choisir une Page.'}
           </p>
           {!runtime.configured && <p>Configuration Meta manquante côté serveur.</p>}
           {runtime.expiresAt && <p>Expiration : {new Date(runtime.expiresAt).toLocaleString()}</p>}
@@ -90,7 +97,7 @@ export function FacebookConnection() {
               })
             }
           >
-            Connecter Facebook
+            {runtime.connectionId ? 'Reconnecter Facebook' : 'Connecter Facebook'}
           </button>
           {authorizeUrl && (
             <a
@@ -104,25 +111,35 @@ export function FacebookConnection() {
           )}
           {runtime.connectionId && (
             <>
-              <label>
-                Page Facebook de destination
-                <select value={page} disabled={busy} onChange={(e) => setPage(e.target.value)}>
-                  <option value="">Choisir une Page…</option>
-                  {runtime.pages?.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button
-                type="button"
-                className="button"
-                disabled={busy || !page || runtime.state === 'expired'}
-                onClick={() => void run(() => facebookApi.select(runtime.connectionId!, page))}
-              >
-                Utiliser cette Page
-              </button>
+              {(runtime.pages?.length ?? 0) === 0 ? (
+                <p>
+                  Vérifiez vos accès aux Pages et les autorisations accordées à l’application Meta,
+                  puis reconnectez Facebook. Actualiser relit les Pages enregistrées lors de la
+                  connexion.
+                </p>
+              ) : (
+                <>
+                  <label>
+                    Page Facebook de destination
+                    <select value={page} disabled={busy} onChange={(e) => setPage(e.target.value)}>
+                      <option value="">Choisir une Page…</option>
+                      {runtime.pages?.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    className="button"
+                    disabled={busy || !page || runtime.state === 'expired'}
+                    onClick={() => void run(() => facebookApi.select(runtime.connectionId!, page))}
+                  >
+                    Utiliser cette Page
+                  </button>
+                </>
+              )}
               <button
                 type="button"
                 className="button"

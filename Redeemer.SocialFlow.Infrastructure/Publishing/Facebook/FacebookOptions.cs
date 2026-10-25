@@ -6,11 +6,15 @@ public sealed class FacebookOptions
     public static readonly string[] RequiredScopes = ["pages_show_list", "pages_read_engagement", "pages_manage_posts"];
     public string AppId { get; set; } = "";
     public string AppSecret { get; set; } = "";
+    public string? LoginConfigId { get; set; }
     public bool Enabled { get; set; }
+    public bool OAuthResourceDiagnosticsEnabled { get; set; }
+    public string? OAuthResourceDiagnosticsExpectedPageId { get; set; }
     public bool PublicationEnabled { get; set; }
     public bool WorkerEnabled { get; set; }
     public string StorageDirectory { get; set; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Redeemer.SocialFlow", "Facebook");
-    public bool Configured => NumericId(AppId) && !string.IsNullOrWhiteSpace(AppSecret);
+    public bool Configured => NumericId(AppId) && !string.IsNullOrWhiteSpace(AppSecret) &&
+        (LoginConfigId is null || NumericId(LoginConfigId));
     public static bool NumericId(string? value) => value is { Length: > 0 and <= 80 } && value.All(char.IsAsciiDigit);
 }
 // Classes deliberately have no generated ToString containing credentials.
@@ -27,7 +31,10 @@ public sealed class FacebookConnection
     public Guid Id { get; init; } = Guid.NewGuid();
     public required string AppId { get; init; }
     public required string UserToken { get; init; }
-    public required DateTimeOffset ExpiresAt { get; init; }
+    // null means not supplied, never an indefinitely valid grant.
+    public required DateTimeOffset? ExpiresAt { get; init; }
+    public DateTimeOffset? DataAccessExpiresAt { get; init; }
+    public bool HasElapsedDeadline(DateTimeOffset now) => ExpiresAt <= now || DataAccessExpiresAt <= now;
     public required string[] Scopes { get; init; }
     public required FacebookPageCredential[] Pages { get; init; }
     public string? SelectedPageId { get; set; }

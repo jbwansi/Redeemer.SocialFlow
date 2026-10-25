@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text.Json;
+using Microsoft.Extensions.Options;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -10,6 +11,7 @@ using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Redeemer.SocialFlow.Api.Development.Facebook;
 using Redeemer.SocialFlow.Api.Development.LinkedIn;
@@ -30,11 +32,13 @@ public sealed class FacebookPublicationTests : IAsyncLifetime
     private readonly string root = Path.Combine(Path.GetTempPath(), "facebook-test-" + Guid.NewGuid().ToString("N"));
     private readonly Clock clock = new();
     private readonly Handler handler = new();
+    private readonly CapturedLogs logs = new();
     private WebApplicationFactory<Program> factory = null!;
     private HttpClient client = null!;
     private FacebookConnection connection = null!;
     private WebApplicationFactory<Program> Factory(string environment = "Development", bool enabled = true, bool local = true) =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(builder => builder.UseEnvironment(environment)
+            .ConfigureLogging(logging => logging.SetMinimumLevel(LogLevel.Trace).AddProvider(logs))
             .UseSetting("ConnectionStrings:SocialFlow", $"Data Source={Path.Combine(root,"test.db")};Pooling=False")
             .UseSetting("Facebook:Enabled", enabled.ToString()).UseSetting("Facebook:PublicationEnabled", "true")
             .UseSetting("Facebook:WorkerEnabled", "false").UseSetting("Facebook:AppId", "42").UseSetting("Facebook:AppSecret", "test-app-secret")
@@ -48,7 +52,7 @@ public sealed class FacebookPublicationTests : IAsyncLifetime
                 services.AddSingleton<IStartupFilter>(new Address(local));
                 services.AddHttpClient<FacebookGraphClient>().ConfigurePrimaryHttpMessageHandler(() => handler);
                 services.AddHttpClient<FacebookPostPublisher>().ConfigurePrimaryHttpMessageHandler(() => handler);
-                services.PostConfigure<FacebookOptions>(o => o.WorkerEnabled = true); // Exercise the same scan, without starting the timer.
+                services.PostConfigure<FacebookOptions>(o => { o.WorkerEnabled = true; o.LoginConfigId = null; o.OAuthResourceDiagnosticsEnabled = false; }); // Isolate local configuration; exercise the scan without starting its timer.
             }));
     private static HttpClient Client(WebApplicationFactory<Program> factory) => factory.CreateClient(new() { BaseAddress = new Uri("https://localhost:65474"), AllowAutoRedirect = false, HandleCookies = false });
     public async Task InitializeAsync()
@@ -114,7 +118,7 @@ public sealed class FacebookPublicationTests : IAsyncLifetime
     }
     [Fact] public async Task ExpiredConnectionIsNotDispatched()
     {
-        var item=await Seed(false);clock.Now=connection.ExpiresAt.AddMinutes(1);await Tick();
+        var item=await Seed(false);clock.Now=connection.ExpiresAt!.Value.AddMinutes(1);await Tick();
         Assert.Equal(0,handler.Publications);await using var scope=factory.Services.CreateAsyncScope();Assert.Empty(await scope.ServiceProvider.GetRequiredService<SocialFlowDbContext>().PublicationOperations.ToListAsync());
         using var runtime=JsonDocument.Parse(await client.GetStringAsync("/api/dev/facebook/runtime"));Assert.Equal("expired",runtime.RootElement.GetProperty("state").GetString());
     }
@@ -128,17 +132,56 @@ public sealed class FacebookPublicationTests : IAsyncLifetime
         var runtime=await client.GetStringAsync("/api/dev/facebook/runtime");Assert.DoesNotContain("secret",runtime);Assert.DoesNotContain("AccessToken",runtime);
         (await client.PostAsJsonAsync("/api/dev/facebook/disconnect",new {ConnectionId=connection.Id})).EnsureSuccessStatusCode();Assert.Null(await factory.Services.GetRequiredService<IFacebookConnectionStore>().ReadAsync());
     }
-    [Fact] public async Task OAuthTicketStateCookieExchangeAndReplayProtection()
+    [Theory]
+    [InlineData(false, false, false, false)]
+    [InlineData(true, false, false, false)]
+    [InlineData(true, true, false, false)]
+    [InlineData(true, false, true, false)]
+    [InlineData(true, false, true, true)]
+    public async Task OAuthTicketStateCookieExchangeAndReplayProtection(bool missingExpiry, bool invalidDebug, bool zeroExpiry, bool business)
     {
+        handler.MissingExpiry = missingExpiry; handler.InvalidDebug = invalidDebug;
+        handler.ZeroExpiry = zeroExpiry;
+        if (business) factory.Services.GetRequiredService<IOptions<FacebookOptions>>().Value.LoginConfigId = "987654";
         using var start=await client.PostAsJsonAsync("/api/dev/facebook/connect",new {});start.EnsureSuccessStatusCode();
         using var startJson=JsonDocument.Parse(await start.Content.ReadAsStringAsync());var url=startJson.RootElement.GetProperty("authorizeUrl").GetString()!;
         using var publicClient=Client(factory);using var authorize=await publicClient.GetAsync(url);Assert.Equal(HttpStatusCode.Redirect,authorize.StatusCode);
-        var redirect=authorize.Headers.Location!;Assert.Equal("www.facebook.com",redirect.Host);var query=QueryHelpers.ParseQuery(redirect.Query);Assert.Equal(string.Join(',',FacebookOptions.RequiredScopes),query["scope"]);
+        var redirect=authorize.Headers.Location!;Assert.Equal("www.facebook.com",redirect.Host);var query=QueryHelpers.ParseQuery(redirect.Query);
+        if (business) { Assert.Equal("987654", query["config_id"]); Assert.False(query.ContainsKey("scope")); }
+        else { Assert.False(query.ContainsKey("config_id")); Assert.Equal(string.Join(',',FacebookOptions.RequiredScopes),query["scope"]); }
+        Assert.Equal("code", query["response_type"]);
         var cookie=authorize.Headers.GetValues("Set-Cookie").Single();Assert.Contains("secure",cookie,StringComparison.OrdinalIgnoreCase);Assert.Contains("httponly",cookie,StringComparison.OrdinalIgnoreCase);
         publicClient.DefaultRequestHeaders.Add("Cookie",cookie.Split(';')[0]);
         var callback="/api/dev/facebook/callback?state="+query["state"]+"&code=test-code";
-        using var response=await publicClient.GetAsync(callback);Assert.Equal(HttpStatusCode.Redirect,response.StatusCode);
-        Assert.DoesNotContain("code",response.Headers.Location!.ToString());var stored=await factory.Services.GetRequiredService<IFacebookConnectionStore>().ReadAsync();Assert.Null(stored!.SelectedPageId);Assert.Equal(2,handler.Exchanges);
+        using var response=await publicClient.GetAsync(callback);
+        Assert.Equal(invalidDebug ? HttpStatusCode.BadGateway : HttpStatusCode.Redirect,response.StatusCode);
+        var stored=await factory.Services.GetRequiredService<IFacebookConnectionStore>().ReadAsync();
+        if (invalidDebug)
+        {
+            Assert.Contains(logs.Messages, text => text.Contains("Stage=debug_token; Category=invalid_response; ExceptionType=JsonException"));
+            Assert.Contains(logs.Messages, text => text.Contains("Stage=meta_oauth; Category=invalid_response; ExceptionType=JsonException"));
+            Assert.Equal(connection.Id, stored!.Id); // failed validation cannot replace the protected connection
+            Assert.DoesNotContain("user-secret", await response.Content.ReadAsStringAsync());
+        }
+        else
+        {
+            Assert.Contains(logs.Messages, text => text.Contains("OAuthCompleted=true; PagesCount=2"));
+            Assert.Contains(logs.Messages, text => text.Contains("ConnectionPersisted=true; PagesCount=2"));
+            Assert.DoesNotContain("code",response.Headers.Location!.ToString()); Assert.Null(stored!.SelectedPageId);
+            if (zeroExpiry)
+            {
+                Assert.Null(stored.ExpiresAt);
+                var restartedStore = new ProtectedFacebookConnectionStore(Options.Create(new FacebookOptions { AppId = "42", StorageDirectory = Path.Combine(root, "credentials") }));
+                Assert.Null((await restartedStore.ReadAsync())!.ExpiresAt);
+            }
+            else Assert.Equal(clock.GetUtcNow().AddSeconds(missingExpiry ? 3600 : 5184000), stored.ExpiresAt);
+        }
+        Assert.Equal(2,handler.Exchanges);
+        Assert.Equal(missingExpiry ? 1 : 0, handler.DebugCalls);
+        Assert.Equal(0, handler.Publications);
+        foreach (var secret in new[] { "test-app-secret", "user-secret", "page-secret", "test-code", "input_token" })
+            Assert.DoesNotContain(logs.Messages, text => text.Contains(secret, StringComparison.Ordinal));
+        Assert.DoesNotContain(logs.Messages, text => text.StartsWith("System.Net.Http.HttpClient.FacebookGraphClient", StringComparison.Ordinal));
         using var replay=await publicClient.GetAsync(callback);Assert.Equal(HttpStatusCode.Unauthorized,replay.StatusCode);Assert.Equal(2,handler.Exchanges);
         using var reused=await publicClient.GetAsync(url);Assert.Equal(HttpStatusCode.Unauthorized,reused.StatusCode);
     }
@@ -158,6 +201,50 @@ public sealed class FacebookPublicationTests : IAsyncLifetime
         var path="/api/dev/facebook/callback?state="+flow.State+"&error=access_denied";
         Assert.Equal(expired?HttpStatusCode.Unauthorized:HttpStatusCode.BadRequest,(await browser.GetAsync(path)).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized,(await browser.GetAsync(path)).StatusCode);Assert.Equal(0,handler.Exchanges);
+    }
+    [Fact]
+    public async Task UnknownExpiryPersistsDataDeadlineAndRuntimeFailsClosedWhenRevalidationFails()
+    {
+        var unknown = new FacebookConnection { AppId = connection.AppId, UserToken = connection.UserToken,
+            ExpiresAt = null, DataAccessExpiresAt = clock.GetUtcNow().AddMinutes(30), Scopes = connection.Scopes,
+            Pages = connection.Pages, SelectedPageId = connection.SelectedPageId };
+        await factory.Services.GetRequiredService<IFacebookConnectionStore>().SaveAsync(unknown);
+        var restarted = new ProtectedFacebookConnectionStore(Options.Create(new FacebookOptions { AppId = "42", StorageDirectory = Path.Combine(root, "credentials") }));
+        var read = await restarted.ReadAsync();
+        Assert.Null(read!.ExpiresAt);
+        Assert.Equal(unknown.DataAccessExpiresAt, read.DataAccessExpiresAt);
+        handler.ZeroExpiry = true;
+        using (var runtime = JsonDocument.Parse(await client.GetStringAsync("/api/dev/facebook/runtime")))
+        {
+            Assert.True(runtime.RootElement.GetProperty("connected").GetBoolean());
+            Assert.True(runtime.RootElement.GetProperty("revalidationRequired").GetBoolean());
+            Assert.False(runtime.RootElement.GetProperty("expirationKnown").GetBoolean());
+        }
+        handler.InvalidDebug = true;
+        using (var runtime = JsonDocument.Parse(await client.GetStringAsync("/api/dev/facebook/runtime")))
+            Assert.False(runtime.RootElement.GetProperty("connected").GetBoolean());
+        var item = await Seed(false);
+        await Tick();
+        Assert.Equal(0, handler.Publications);
+        handler.InvalidDebug = false;
+        clock.Now = unknown.DataAccessExpiresAt.Value;
+        using var expired = JsonDocument.Parse(await client.GetStringAsync("/api/dev/facebook/runtime"));
+        Assert.Equal("expired", expired.RootElement.GetProperty("state").GetString());
+    }
+    [Theory]
+    [InlineData(true, "no-pages", 0)]
+    [InlineData(false, "select-page", 2)]
+    public async Task RuntimeDistinguishesPersistedAccountFromPageReadiness(bool empty, string state, int count)
+    {
+        var saved = new FacebookConnection { AppId = connection.AppId, UserToken = connection.UserToken,
+            ExpiresAt = connection.ExpiresAt, Scopes = connection.Scopes, Pages = empty ? [] : connection.Pages };
+        await factory.Services.GetRequiredService<IFacebookConnectionStore>().SaveAsync(saved);
+        using var json = JsonDocument.Parse(await client.GetStringAsync("/api/dev/facebook/runtime"));
+        Assert.Equal(state, json.RootElement.GetProperty("state").GetString());
+        Assert.False(json.RootElement.GetProperty("connected").GetBoolean());
+        Assert.Equal(saved.Id, json.RootElement.GetProperty("connectionId").GetGuid());
+        Assert.Equal(count, json.RootElement.GetProperty("pages").GetArrayLength());
+        Assert.Contains(logs.Messages, text => text.Contains("Stage=runtime; ConnectionPersisted=True; PagesCount=" + count));
     }
     private static IEnumerable<HttpRequestMessage> SensitiveRoutes()
     {
@@ -188,12 +275,15 @@ public sealed class FacebookPublicationTests : IAsyncLifetime
     private sealed class Address(bool local):IStartupFilter { public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next)=>app=> { app.Use((ctx,run)=> {ctx.Connection.RemoteIpAddress=IPAddress.Parse(local?"127.0.0.1":"203.0.113.2");return run();});next(app); }; }
     private sealed class Handler:HttpMessageHandler
     {
+        public bool MissingExpiry, InvalidDebug, ZeroExpiry;
+        public int DebugCalls;
         public int Publications,Exchanges;public int Status=200;public bool PermissionDenied,ThrowAfterDispatch;public string LastPath="",Body="",Bearer="";
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken token)
         {
             Assert.Equal("graph.facebook.com",request.RequestUri!.Host);Assert.Equal("https",request.RequestUri.Scheme);Assert.StartsWith("/v26.0/",request.RequestUri.AbsolutePath);
             var path=request.RequestUri.AbsolutePath;
-            if(path.EndsWith("/oauth/access_token")) { Exchanges++;return Json(200,"{\"access_token\":\"user-secret\",\"expires_in\":5184000}"); }
+            if(path.EndsWith("/oauth/access_token")) { Exchanges++;return Json(200, MissingExpiry && Exchanges == 2 ? "{\"access_token\":\"user-secret\"}" : "{\"access_token\":\"user-secret\",\"expires_in\":5184000}"); }
+            if(path.EndsWith("/debug_token")) { DebugCalls++; return Json(200, JsonSerializer.Serialize(new { data = new { type = "USER", is_valid = !InvalidDebug, app_id = "42", expires_at = ZeroExpiry ? 0L : 1893459600L } })); }
             if(path.EndsWith("/permissions")) return PermissionDenied?Json(400,"{\"error\":{\"code\":190}}") : Json(200,JsonSerializer.Serialize(new {data=FacebookOptions.RequiredScopes.Select(p=>new {permission=p,status="granted"})}));
             if(path.EndsWith("/accounts")) return Json(200,"{\"data\":[{\"id\":\"123\",\"name\":\"Page One\",\"access_token\":\"page-secret\",\"tasks\":[\"CREATE_CONTENT\"]},{\"id\":\"456\",\"name\":\"Page Two\",\"access_token\":\"other-secret\",\"tasks\":[\"CREATE_CONTENT\"]}]}");
             Assert.Equal(HttpMethod.Post,request.Method);Interlocked.Increment(ref Publications);LastPath=path;Body=await request.Content!.ReadAsStringAsync(token);Bearer=request.Headers.Authorization!.Parameter!;
@@ -201,5 +291,18 @@ public sealed class FacebookPublicationTests : IAsyncLifetime
             return Json(Status,Status==200?"{\"id\":\"123_789\",\"post_id\":\"123_789\"}":"{\"error\":{\"code\":2,\"is_transient\":true}}");
         }
         private static HttpResponseMessage Json(int status,string value)=>new((HttpStatusCode)status){Content=new StringContent(value,System.Text.Encoding.UTF8,"application/json")};
+    }
+    private sealed class CapturedLogs : ILoggerProvider
+    {
+        public System.Collections.Concurrent.ConcurrentQueue<string> Messages { get; } = new();
+        public ILogger CreateLogger(string categoryName) => new Capture(categoryName, Messages);
+        public void Dispose() { }
+        private sealed class Capture(string category, System.Collections.Concurrent.ConcurrentQueue<string> messages) : ILogger
+        {
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+            public bool IsEnabled(LogLevel logLevel) => true;
+            public void Log<TState>(LogLevel level, EventId id, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+                => messages.Enqueue(category + ": " + formatter(state, exception) + exception);
+        }
     }
 }

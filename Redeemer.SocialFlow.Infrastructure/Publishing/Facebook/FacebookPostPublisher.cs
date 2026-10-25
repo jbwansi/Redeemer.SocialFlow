@@ -18,10 +18,11 @@ public sealed class FacebookPostPublisher(HttpClient http, IFacebookConnectionSt
             if (request.Platform != SocialPlatform.Facebook || !FacebookOptions.NumericId(request.Destination) || !options.Value.Configured)
                 return PostPublicationResult.Failed();
             var connection = await connections.ReadAsync(cancellationToken);
-            if (connection is null || connection.AppId != options.Value.AppId || connection.ExpiresAt <= clock.GetUtcNow() ||
+            if (connection is null || connection.AppId != options.Value.AppId || connection.HasElapsedDeadline(clock.GetUtcNow()) ||
                 FacebookOptions.RequiredScopes.Except(connection.Scopes).Any() || !connection.Pages.Any(p => p.Id == request.Destination && p.CanCreate))
                 return PostPublicationResult.Failed();
             // Recheck the current grant and Page task before every external publication.
+            var verified = await graph.VerifyUserTokenAsync(connection.UserToken, cancellationToken);
             await graph.PermissionsAsync(connection.UserToken, cancellationToken);
             var page = (await graph.PagesAsync(connection.UserToken, cancellationToken)).SingleOrDefault(p => p.Id == request.Destination);
             if (page is null) return PostPublicationResult.Failed();
@@ -44,7 +45,7 @@ public sealed class FacebookPostPublisher(HttpClient http, IFacebookConnectionSt
             else message.Content = new FormUrlEncodedContent(new Dictionary<string,string> {
                 ["message"] = request.Content, ["appsecret_proof"] = graph.Proof(page.AccessToken) });
             cancellationToken.ThrowIfCancellationRequested();
-            if (connection.ExpiresAt <= clock.GetUtcNow()) return PostPublicationResult.Failed();
+            if (connection.HasElapsedDeadline(clock.GetUtcNow()) || verified.HasElapsedDeadline(clock.GetUtcNow())) return PostPublicationResult.Failed();
             // A /photos request uploads AND publishes atomically from this client's perspective.
             // Any lost acknowledgement must therefore be treated as potentially published.
             dispatched = true;

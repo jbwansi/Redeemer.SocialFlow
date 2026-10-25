@@ -24,6 +24,9 @@ public sealed class FacebookOAuthDiagnosticTests
         Assert.Contains("HttpStatus=400", output);
         Assert.Contains("MetaCode=190", output);
         Assert.Contains("MetaSubcode=460", output);
+        Assert.Contains("Category=provider_rejection", output);
+        Assert.Contains("ExceptionType=FacebookAuthorizationException", output);
+        if (stage == "pages") Assert.Contains("PagesFetchStatus=failed", output);
         Assert.DoesNotContain("private-", output);
         Assert.Equal(failAt, handler.Calls);
     }
@@ -41,6 +44,7 @@ public sealed class FacebookOAuthDiagnosticTests
         var output = string.Join("\n", log.Messages);
         Assert.Contains("Category=" + expected, output);
         Assert.Contains("Stage=code_exchange", output);
+        Assert.Contains("ExceptionType=", output);
         Assert.DoesNotContain("private-", output);
     }
     private sealed class Handler(int failAt, string failure = "meta") : HttpMessageHandler

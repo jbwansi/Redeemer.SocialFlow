@@ -3,7 +3,8 @@ import type { PublicationOperation, PublicationPreview, PublicationView } from '
 export interface FacebookRuntime {
   connected: boolean
   configured: boolean
-  state: 'disconnected' | 'expired' | 'select-page' | 'connected'
+  state:
+    'disconnected' | 'expired' | 'select-page' | 'connected' | 'no-pages' | 'verification-required'
   connectionId: string | null
   expiresAt: string | null
   destination: string | null

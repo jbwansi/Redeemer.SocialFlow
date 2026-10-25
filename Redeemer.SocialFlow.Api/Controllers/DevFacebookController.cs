@@ -12,14 +12,20 @@ public sealed record FacebookDisconnect(Guid ConnectionId);
 [ServiceFilter(typeof(FacebookAdminFilter))]
 [RequestSizeLimit(64 * 1024)]
 public sealed class DevFacebookController(FacebookPublicationService publication, IFacebookConnectionStore connections,
-    FacebookFlows flows, IOptions<FacebookOptions> options, TimeProvider clock) : ControllerBase
+    FacebookFlows flows, IOptions<FacebookOptions> options, TimeProvider clock, FacebookGraphClient graph, ILogger<DevFacebookController> logger) : ControllerBase
 {
     [HttpGet("runtime")]
     public Task<IActionResult> Runtime(CancellationToken token) => Safe(async () => {
         var runtime = await publication.RuntimeAsync(token); var connection = await connections.ReadAsync(token);
+        var state = connection is null ? "disconnected" : connection.HasElapsedDeadline(clock.GetUtcNow()) ? "expired"
+            : runtime.Connected ? "connected" : connection.Pages.Length == 0 ? "no-pages"
+            : connection.SelectedPageId is null ? "select-page" : "verification-required";
+        logger.LogInformation("Facebook runtime: Stage=runtime; ConnectionPersisted={ConnectionPersisted}; PagesCount={PagesCount}; State={State}", connection is not null, connection?.Pages.Length ?? 0, state);
         return (object)new { runtime.Connected, runtime.ExpiresAt, runtime.Destination, runtime.PublicationEnabled, runtime.WorkerEnabled,
             Configured = options.Value.Configured, ConnectionId = connection?.Id,
-            State = connection is null ? "disconnected" : connection.ExpiresAt <= clock.GetUtcNow() ? "expired" : runtime.Connected ? "connected" : "select-page",
+            ExpirationKnown = connection?.ExpiresAt is not null, DataAccessExpiresAt = connection?.DataAccessExpiresAt,
+            RevalidationRequired = connection is not null && connection.ExpiresAt is null,
+            State = state,
             Pages = connection?.Pages.Select(p => new { p.Id, p.Name }).ToArray() };
     });
     [HttpPost("connect")]
@@ -30,7 +36,8 @@ public sealed class DevFacebookController(FacebookPublicationService publication
     [HttpPost("page")]
     public Task<IActionResult> Page(FacebookPageChoice request, CancellationToken token) => Safe(async () => {
         var connection = await connections.ReadAsync(token);
-        if (connection is null || connection.ExpiresAt <= clock.GetUtcNow()) throw new FacebookAuthorizationException();
+        if (connection is null || connection.HasElapsedDeadline(clock.GetUtcNow())) throw new FacebookAuthorizationException();
+        if (connection.ExpiresAt is null) await graph.VerifyUserTokenAsync(connection.UserToken, token);
         await connections.SelectAsync(request.ConnectionId, request.PageId, token); return (object)new { Selected = true };
     });
     [HttpPost("disconnect")]

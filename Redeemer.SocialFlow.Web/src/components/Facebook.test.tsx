@@ -61,12 +61,42 @@ function details() {
     />,
   )
 }
+it('distinguishes a connected account with no eligible Pages', async () => {
+  vi.mocked(facebookApi.runtime).mockResolvedValue({
+    ...runtime,
+    connected: false,
+    destination: null,
+    state: 'no-pages',
+    pages: [],
+  })
+  const log = vi.spyOn(console, 'info').mockImplementation(() => {})
+  render(<FacebookConnection />)
+  await screen.findByText('Compte Facebook connecté. Aucune Page accessible pour la publication.')
+  expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Utiliser cette Page' })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Reconnecter Facebook' })).toBeEnabled()
+  expect(log).toHaveBeenCalledWith('[Facebook] FrontendPagesCount=%d', 0)
+})
+it('distinguishes available Pages awaiting selection', async () => {
+  vi.mocked(facebookApi.runtime).mockResolvedValue({
+    ...runtime,
+    connected: false,
+    destination: null,
+    state: 'select-page',
+  })
+  render(<FacebookConnection />)
+  await screen.findByText('Compte Facebook connecté. Sélectionnez une Page de destination.')
+  expect(screen.getByRole('option', { name: 'Page One' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Utiliser cette Page' })).toBeDisabled()
+})
 it('connects explicitly, offers Pages and disconnects without browser token storage', async () => {
   const storage = vi.spyOn(Storage.prototype, 'setItem')
   render(<FacebookConnection />)
   await screen.findByText('Connecté à la Page 123')
   expect(facebookApi.connect).not.toHaveBeenCalled()
-  await userEvent.click(screen.getByRole('button', { name: 'Connecter Facebook' }))
+  await userEvent.click(
+    screen.getByRole('button', { name: /Connecter Facebook|Reconnecter Facebook/ }),
+  )
   expect(
     await screen.findByRole('link', { name: 'Ouvrir l’autorisation Facebook' }),
   ).toHaveAttribute('href', 'https://localhost:65474/api/dev/facebook/authorize?ticket=one-use')
@@ -95,10 +125,14 @@ it('keeps the panel visible after a 404 and recovers on refresh', async () => {
   render(<FacebookConnection />)
   await screen.findByText(/Connexion Facebook indisponible/)
   expect(screen.getByLabelText('Facebook Development')).toBeInTheDocument()
-  expect(screen.getByRole('button', { name: 'Connecter Facebook' })).toBeDisabled()
+  expect(
+    screen.getByRole('button', { name: /Connecter Facebook|Reconnecter Facebook/ }),
+  ).toBeDisabled()
   await userEvent.click(screen.getByRole('button', { name: 'Actualiser Facebook' }))
   await screen.findByText('Connecté à la Page 123')
-  expect(screen.getByRole('button', { name: 'Connecter Facebook' })).toBeEnabled()
+  expect(
+    screen.getByRole('button', { name: /Connecter Facebook|Reconnecter Facebook/ }),
+  ).toBeEnabled()
   expect(screen.queryByText(/Connexion Facebook indisponible/)).not.toBeInTheDocument()
   expect(facebookApi.connect).not.toHaveBeenCalled()
 })
@@ -110,7 +144,9 @@ it('allows connection when publication is disabled', async () => {
   })
   render(<FacebookConnection />)
   await screen.findByText('Publication Facebook désactivée côté serveur.')
-  expect(screen.getByRole('button', { name: 'Connecter Facebook' })).toBeEnabled()
+  expect(
+    screen.getByRole('button', { name: /Connecter Facebook|Reconnecter Facebook/ }),
+  ).toBeEnabled()
 })
 it('requires preview and explicit confirmation and displays Facebook result', async () => {
   details()

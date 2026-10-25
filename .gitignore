@@ -372,3 +372,9 @@ Redeemer.SocialFlow.Web/.env.local
 Redeemer.SocialFlow.Web/.env.*.local
 
 Redeemer.SocialFlow.Web/.tools/
+
+# Local development credentials/certificates (normally stored outside the repository)
+*.dpapi
+*.pem
+*.key
+.local-development/
