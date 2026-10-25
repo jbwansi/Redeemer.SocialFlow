@@ -20,9 +20,15 @@ import { PostDetails } from './components/PostDetails'
 import { GenerateDraft } from './components/GenerateDraft'
 import { FacebookConnection } from './components/FacebookConnection'
 import { LinkedInConnection } from './components/LinkedInConnection'
+import { SocialConnections } from './pages/SocialConnections'
 
-type Page = 'dashboard' | 'calendar' | 'posts' | 'trash' | 'identities'
+type Page = 'dashboard' | 'calendar' | 'posts' | 'trash' | 'identities' | 'social-connections'
 const pages = {
+  'social-connections': {
+    title: 'Réseaux sociaux',
+    description: 'Les comptes et destinations de votre espace.',
+    icon: FileText,
+  },
   identities: {
     title: 'Identités visuelles',
     description: 'Votre bibliothèque de marques, palettes et logos officiels.',
@@ -50,8 +56,12 @@ const pages = {
   },
 }
 function currentPage(): Page {
-  const hash = window.location.hash.slice(1)
-  return hash === 'identities' || hash === 'calendar' || hash === 'posts' || hash === 'trash'
+  const hash = window.location.hash.slice(1).split('?')[0]
+  return hash === 'social-connections' ||
+    hash === 'identities' ||
+    hash === 'calendar' ||
+    hash === 'posts' ||
+    hash === 'trash'
     ? hash
     : 'dashboard'
 }
@@ -60,11 +70,15 @@ export default function App({
   localAdministration = true,
   canEdit = true,
   workspaceHeader,
+  workspaceId,
+  canManageSocial = false,
 }: {
   workspaceName?: string
   localAdministration?: boolean
   canEdit?: boolean
   workspaceHeader?: ReactNode
+  workspaceId?: string
+  canManageSocial?: boolean
 } = {}) {
   const [page, setPage] = useState<Page>(currentPage)
   const [posts, setPosts] = useState<Post[]>([])
@@ -144,7 +158,11 @@ export default function App({
         <div className="workspace-label">CONTENT WORKSPACE</div>
         <nav aria-label="Main navigation">
           {Object.entries(pages)
-            .filter(([id]) => localAdministration || id !== 'identities')
+            .filter(([id]) =>
+              id === 'social-connections'
+                ? !localAdministration
+                : localAdministration || id !== 'identities',
+            )
             .map(([id, { title, icon: Icon }]) => (
               <a
                 key={id}
@@ -217,7 +235,7 @@ export default function App({
               >
                 <RefreshCw size={18} />
               </button>
-              {canEdit && page !== 'trash' && (
+              {canEdit && page !== 'trash' && page !== 'social-connections' && (
                 <button className="button primary" onClick={() => setEditor({})}>
                   <Plus size={18} />
                   Create post
@@ -236,7 +254,17 @@ export default function App({
               {notice}
             </div>
           )}
-          {page === 'identities' ? (
+          {page === 'social-connections' ? (
+            workspaceId && !localAdministration ? (
+              <SocialConnections
+                key={workspaceId}
+                workspaceId={workspaceId}
+                canManage={canManageSocial}
+              />
+            ) : (
+              <p role="alert">Sélectionnez un espace utilisateur pour gérer ses connexions.</p>
+            )
+          ) : page === 'identities' ? (
             localAdministration ? (
               <VisualIdentities />
             ) : (
@@ -306,6 +334,7 @@ export default function App({
       )}{' '}
       {!editor && selected && (
         <PostDetails
+          workspaceId={workspaceId}
           canEdit={canEdit}
           localAdministration={localAdministration}
           key={selected.id}

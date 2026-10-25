@@ -12,6 +12,12 @@ using Redeemer.SocialFlow.Api.Development.LinkedIn;
 using Redeemer.SocialFlow.Api.Security;
 
 var builder = WebApplication.CreateBuilder(args);
+Redeemer.SocialFlow.Infrastructure.Social.SocialDependencyInjection.AddWorkspaceSocialConnections(builder.Services);
+builder.Services.AddHttpClient("WorkspaceLinkedInPublication", client => client.Timeout = TimeSpan.FromSeconds(30))
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })
+    .RemoveAllLoggers();
+// Incoming OAuth codes must not enter framework request/endpoint diagnostics, including Production.
+builder.Logging.AddFilter("Microsoft.AspNetCore", LogLevel.Warning);
 // Authentication phase never starts historical automatic publishers, even with inherited flags.
 builder.Configuration["LinkedIn:WorkerEnabled"] = "false";
 builder.Configuration["Facebook:WorkerEnabled"] = "false";
@@ -51,6 +57,15 @@ builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.AddOpenApi();
 
 await using var app = builder.Build();
+app.Use(async (context,next) => {
+    if(context.Request.Path.StartsWithSegments("/api/social-oauth")) {
+        context.Items["social-oauth-query"]=context.Request.Query;
+        context.Request.QueryString=QueryString.Empty;
+        context.Response.Headers["Cache-Control"]="no-store";
+        context.Response.Headers["Referrer-Policy"]="no-referrer";
+    }
+    await next(context);
+});
 var historicalOwner = args.SingleOrDefault(a => a.StartsWith(HistoricalWorkspaceOwner.Prefix, StringComparison.Ordinal));
 if (historicalOwner is not null)
 {

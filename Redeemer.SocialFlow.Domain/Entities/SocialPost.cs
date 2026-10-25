@@ -157,6 +157,18 @@ public class SocialPost : IWorkspaceResource
 		UpdatedAt = now;
 	}
 
+    public void ReplanApprovedPublication(DateTimeOffset date, TimeProvider? timeProvider = null)
+    {
+        EnsureNotDeleted();
+        if (Status is not (SocialPostStatus.Approved or SocialPostStatus.Scheduled))
+            throw new DomainException("Seule une publication approuvée ou planifiée peut être replanifiée.");
+        var now = (timeProvider ?? _timeProvider).GetUtcNow();
+        if (date <= now) throw new DomainException("La date doit être dans le futur.");
+        ScheduledAt = date;
+        Status = SocialPostStatus.Scheduled;
+        UpdatedAt = now;
+    }
+
 	public void MarkAsFailed(TimeProvider? timeProvider = null)
 	{
 		EnsureNotDeleted();

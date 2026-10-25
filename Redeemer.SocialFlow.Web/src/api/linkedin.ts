@@ -31,6 +31,11 @@ export interface PublicationPreview {
   confirmation: string
 }
 const base = '/dev/linkedin'
+export const workspaceLinkedInApi = (connectionId: string) => ({
+  publication: (id: string, signal?: AbortSignal) => apiRequest<PublicationView>(`/linkedin/posts/${encodeURIComponent(id)}/publication`, { signal }),
+  preview: (id: string) => apiRequest<PublicationPreview>(`/linkedin/posts/${encodeURIComponent(id)}/preview`, { method: 'POST', body: JSON.stringify({ connectionId }) }),
+  publish: (id: string, confirmation: string) => apiRequest<PublicationOperation>(`/linkedin/posts/${encodeURIComponent(id)}/publish`, { method: 'POST', body: JSON.stringify({ confirmation }) }),
+})
 export const linkedInApi = {
   connect: () => apiRequest<{ authorizeUrl: string }>(`${base}/connect-ticket`, { method: 'POST' }),
   runtime: (signal?: AbortSignal) => apiRequest<LinkedInRuntime>(`${base}/runtime`, { signal }),

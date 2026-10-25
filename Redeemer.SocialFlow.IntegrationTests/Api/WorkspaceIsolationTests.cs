@@ -45,10 +45,15 @@ public sealed partial class WorkspaceIsolationTests : IAsyncLifetime
             .UseSetting("ConnectionStrings:Accounts", $"Data Source={Path.Combine(root, "accounts.db")};Pooling=False")
             .UseSetting("Visuals:Enabled", "true").UseSetting("Facebook:Enabled", "true")
             .UseSetting("LocalAdministration:Enabled", "false")
+            .UseSetting("SocialConnections:Encryption:ActiveKeyId", "test")
+            .UseSetting("SocialConnections:Encryption:Keys:test", Convert.ToBase64String(new byte[32]))
             .ConfigureServices(services =>
             {
                 services.RemoveAll<IDataProtectionProvider>(); services.AddSingleton<IDataProtectionProvider>(new EphemeralDataProtectionProvider());
                 services.RemoveAll<IAccountEmailSender>(); services.AddSingleton<IAccountEmailSender>(mailbox);
+                services.RemoveAll<IWorkspaceOAuthProvider>();
+                services.AddSingleton<IWorkspaceOAuthProvider>(socialProvider);
+                services.AddHttpClient("WorkspaceLinkedInPublication").ConfigurePrimaryHttpMessageHandler(() => linkedInDispatch);
             }));
         await using var scope = factory.Services.CreateAsyncScope();
         await scope.ServiceProvider.GetRequiredService<AccountDbContext>().Database.MigrateAsync();

@@ -7,6 +7,8 @@ Phase 1 account authentication is implemented. See [setup, first account and acc
 
 ## Local persistence
 
+Phase 4 adds workspace social connections and OAuth adapters. See [configuration, permissions, limitations and delivery results](docs/phase-4-social-connections.md). Its migration was applied to the local real database on 25 October 2026 with explicit approval, verified backups and a successful rehearsal. Existing data and Identity accounts were preserved. Other installations require explicit approval before migration. Providers require external credentials and approvals; automatic multi-tenant publishing remains disabled.
+
 Phase 3 adds organization teams, expiring email invitations and Owner/Admin/Editor/Viewer permissions. See [collaboration delivery and migration instructions](docs/phase-3-collaboration.md). With explicit user approval, its migration was applied to the local real database on 25 October 2026 after verified backups and a rehearsal. Existing data and Identity accounts were preserved.
 
 Phase 2 workspaces and tenant isolation are implemented. See [delivery, initialization and historical ownership](docs/phase-2-workspaces.md). With explicit user approval, the two migrations were applied to the local real business database on 25 October 2026 after verified backups and a rehearsal. Historical workspace ownership remains unassigned. Other installations must follow that guide and authorize migration before running the update command below.
@@ -188,3 +190,4 @@ dotnet test Redeemer.SocialFlow.slnx --no-build
 Integration tests start the API host with isolated temporary SQLite files, apply the
 actual migrations, and use separate scopes to verify persisted data and domain behavior.
 Files are removed after each test.
+

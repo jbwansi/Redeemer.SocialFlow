@@ -24,6 +24,7 @@ export function PostDetails({
   references,
   localAdministration = true,
   canEdit = true,
+  workspaceId,
 }: {
   post: Post
   close: () => void
@@ -34,6 +35,7 @@ export function PostDetails({
   references?: KnowledgePassage[]
   localAdministration?: boolean
   canEdit?: boolean
+  workspaceId?: string
 }) {
   const [busy, setBusy] = useState(false)
   const deleting = useRef(false)
@@ -141,6 +143,16 @@ export function PostDetails({
         )}
         {localAdministration && import.meta.env.DEV && [1, 2].includes(post.platform) && (
           <PlatformPublication post={post} busy={busy} setBusy={setBusy} changed={changed} />
+        )}
+        {!localAdministration && canEdit && workspaceId && post.platform === 2 && [3, 4, 5, 7].includes(post.status) && (
+          <PlatformPublication key={workspaceId + post.id} workspaceId={workspaceId} post={post} busy={busy} setBusy={setBusy} changed={changed} />
+        )}
+        {!localAdministration && post.platform === 2 && (!canEdit || !workspaceId) && (
+          <section className="linkedin-panel" aria-label="Publication LinkedIn">
+            <h3>Publication LinkedIn</h3>
+            <p>{!workspaceId ? 'Sélectionnez un workspace actif pour publier.' : 'Publication réservée aux rôles Owner, Admin et Editor. Votre accès est en lecture seule.'}</p>
+            <button className="button" disabled>Publier sur LinkedIn</button>
+          </section>
         )}
         {confirmDelete && (
           <div className="delete-confirm" role="alert">

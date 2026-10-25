@@ -37,7 +37,20 @@ export function WorkspaceShell({
       try {
         await workspacesApi.personal(controller.signal)
         const list = await workspacesApi.list(controller.signal)
-        if (!controller.signal.aborted) setWorkspaces(list)
+        if (!controller.signal.aborted) {
+          setWorkspaces(list)
+          const callback = new URLSearchParams(location.hash.split('?')[1])
+          if (
+            location.hash.startsWith('#social-connections?') &&
+            callback.has('session') &&
+            callback.has('workspace')
+          ) {
+            // Selection rechecks membership on the server; URL parameters never grant access.
+            await select(callback.get('workspace')!, location.hash.slice(1))
+          } else if (callback.get('oauth') === 'failed') {
+            setError('Connexion sociale refusée ou expirée. Ouvrez votre espace et recommencez.')
+          }
+        }
       } catch {
         if (!controller.signal.aborted)
           setError('Vos espaces sont indisponibles. Réessayez ou contactez votre administrateur.')
@@ -63,7 +76,7 @@ export function WorkspaceShell({
     }
   }, [revision])
 
-  async function select(id: string) {
+  async function select(id: string, destination = 'dashboard') {
     setTeam(false)
     pending.current?.abort()
     const controller = new AbortController()
@@ -78,7 +91,7 @@ export function WorkspaceShell({
       setActiveWorkspace(selected.id)
       setActive(selected)
       setDirectory(false)
-      location.hash = 'dashboard'
+      location.hash = destination
     } catch {
       if (!controller.signal.aborted) {
         setDirectory(true)
@@ -224,6 +237,8 @@ export function WorkspaceShell({
             <App
               key={active.id}
               workspaceName={active.name}
+              workspaceId={active.id}
+              canManageSocial={active.role === 1 || active.role === 3}
               workspaceHeader={workspaceHeader}
               localAdministration={false}
               canEdit={active.role !== 4}

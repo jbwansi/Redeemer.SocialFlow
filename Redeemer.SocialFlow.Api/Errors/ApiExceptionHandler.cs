@@ -13,6 +13,7 @@ public sealed class ApiExceptionHandler(IProblemDetailsService problems, ILogger
     {
         var (status, title, detail) = exception switch
         {
+            Redeemer.SocialFlow.Application.Accounts.SocialConnectionException e => (e.Status, "Connexion sociale", e.Message),
             Redeemer.SocialFlow.Application.Accounts.CollaborationException e => (e.Status, "Collaboration", e.Message),
             Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException => (409, "Conflit", "Les données ont changé. Rechargez la page."),
             PostNotFoundException => (404, "Post not found", exception.Message),

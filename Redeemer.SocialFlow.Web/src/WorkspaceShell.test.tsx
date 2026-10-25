@@ -24,6 +24,7 @@ vi.mock('./App', () => ({
 const first: Workspace = { id: 'one', name: 'Personnel Alice', type: 1, status: 1, role: 1 }
 const second: Workspace = { ...first, id: 'two', name: 'Studio Alice', type: 2 }
 beforeEach(() => {
+  location.hash = 'workspaces'
   vi.clearAllMocks()
   setActiveWorkspace(null)
   vi.mocked(workspacesApi.personal).mockResolvedValue(first)
@@ -31,6 +32,14 @@ beforeEach(() => {
   vi.mocked(workspacesApi.select).mockImplementation(async (id) =>
     id === first.id ? first : second,
   )
+})
+it('revalidates the original workspace from an OAuth return before displaying its selection', async () => {
+  location.hash = 'social-connections?session=discovery&workspace=two'
+  render(<WorkspaceShell email="alice@example.test" logout={vi.fn()} busy={false} />)
+  expect(await screen.findByText('Contenu : Studio Alice')).toBeInTheDocument()
+  expect(workspacesApi.select).toHaveBeenCalledWith('two', expect.any(AbortSignal))
+  expect(location.hash).toContain('session=discovery')
+  expect(workspaceRequest().id).toBe('two')
 })
 it('lists accessible spaces and clears all previous content and requests before selecting another', async () => {
   render(<WorkspaceShell email="alice@example.test" logout={vi.fn()} busy={false} />)

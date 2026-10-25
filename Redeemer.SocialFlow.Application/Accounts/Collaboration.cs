@@ -2,14 +2,14 @@ using Redeemer.SocialFlow.Domain.Entities;
 
 namespace Redeemer.SocialFlow.Application.Accounts;
 
-public enum WorkspacePermission { Read, Edit, Approve, ManageTeam }
+public enum WorkspacePermission { Read, Edit, Approve, ManageTeam, ManageSocial }
 public static class WorkspacePermissions
 {
     public static bool Allows(WorkspaceRole role, WorkspacePermission permission) => permission switch
     {
         WorkspacePermission.Read => Enum.IsDefined(role),
         WorkspacePermission.Edit or WorkspacePermission.Approve => role is WorkspaceRole.Owner or WorkspaceRole.Admin or WorkspaceRole.Editor,
-        WorkspacePermission.ManageTeam => role is WorkspaceRole.Owner or WorkspaceRole.Admin,
+        WorkspacePermission.ManageTeam or WorkspacePermission.ManageSocial => role is WorkspaceRole.Owner or WorkspaceRole.Admin,
         _ => false
     };
     public static bool CanManage(WorkspaceRole actor, WorkspaceRole target, WorkspaceRole proposed) =>
