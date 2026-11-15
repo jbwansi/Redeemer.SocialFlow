@@ -38,7 +38,21 @@ public sealed class SocialConnections(DbContextOptions<SocialFlowDbContext> opti
     private SocialConnectionStatus Status(SocialConnection c) => c.ConnectionStatus == SocialConnectionStatus.Connected && c.ExpiresAtUtc <= clock.GetUtcNow()
         ? SocialConnectionStatus.Expired : c.ConnectionStatus;
     private SocialConnectionDto Dto(SocialConnection c) => new(c.Id, c.Platform, c.ExternalAccountId, c.DisplayName, c.AccountType, Status(c),
-        c.ConnectedAtUtc, c.ExpiresAtUtc, c.LastValidatedAtUtc, c.PublishingPermissionGranted, c.Revision);
+        c.ConnectedAtUtc, c.ExpiresAtUtc, c.LastValidatedAtUtc, c.CanPublish, c.Revision, Capability(c));
+    private static PublishingCapabilityEvidence Capability(SocialConnection c) => new(
+        c.PublishingCapabilityStatus ?? (c.ConnectionStatus == SocialConnectionStatus.Revoked ? PublishingCapabilityStatus.Denied :
+            c.PublishingPermissionGranted ? PublishingCapabilityStatus.Verified : PublishingCapabilityStatus.Unverified),
+        c.PublishingCapabilityReason ?? (c.ConnectionStatus == SocialConnectionStatus.Revoked ? "ConnectionRevoked" :
+            c.Platform == SocialPlatform.Facebook && !c.PublishingPermissionGranted ? "PageTaskEvidenceUnavailable" : "LegacyGrant"),
+        c.PublishingCapabilitySource ?? "LegacyStoredGrant",
+        c.PublishingCapabilityCheckedAtUtc, c.PublishingCapabilityTask);
+    private static void ApplyCapability(SocialConnection c, PublishingCapabilityEvidence evidence)
+    {
+        c.PublishingCapabilityStatus = evidence.Status; c.PublishingCapabilityReason = evidence.Reason;
+        c.PublishingCapabilitySource = evidence.Source; c.PublishingCapabilityCheckedAtUtc = evidence.CheckedAtUtc;
+        c.PublishingCapabilityTask = evidence.Task;
+        c.PublishingPermissionGranted = evidence.Status == PublishingCapabilityStatus.Verified;
+    }
     public async Task<IReadOnlyList<SocialConnectionDto>> ListAsync(Guid workspaceId, CancellationToken ct)
     {
         await using var db = Db(workspaceId); await Access(db, workspaceId, WorkspacePermission.Read, ct);
@@ -47,8 +61,14 @@ public sealed class SocialConnections(DbContextOptions<SocialFlowDbContext> opti
     public async Task<IReadOnlyList<SocialProviderDto>> ProvidersAsync(Guid workspaceId, CancellationToken ct)
     {
         await using var db = Db(workspaceId); await Access(db, workspaceId, WorkspacePermission.Read, ct);
+        var membership = await db.WorkspaceMemberships.SingleAsync(x => x.WorkspaceId == workspaceId && x.UserId == actor.UserId, ct);
+        var canManage = WorkspacePermissions.Allows(membership.Role, WorkspacePermission.ManageSocial);
         return Enum.GetValues<SocialPlatform>().Select(platform => {
             var available = secrets.Available && providers.Any(x => x.Platform == platform && x.Available);
+            if (!canManage)
+                return new SocialProviderDto(platform, available, available ? "Connexion disponible. Owner ou Admin requis pour la gérer." : "Connexion indisponible. Contactez un Owner ou Admin de cet espace.");
+            if (platform == SocialPlatform.Facebook && providers.OfType<FacebookWorkspaceOAuthProvider>().SingleOrDefault() is { } facebook)
+                return new SocialProviderDto(platform, available, !secrets.Available ? "Clé de chiffrement des connexions indisponible côté serveur." : facebook.ConfigurationMessage);
             if (platform == SocialPlatform.LinkedIn && providers.OfType<LinkedInWorkspaceOAuthProvider>().SingleOrDefault() is { } linkedIn)
                 return new SocialProviderDto(platform, available, !secrets.Available ? "Clé de chiffrement des connexions indisponible côté serveur." : linkedIn.ConfigurationMessage);
             return new SocialProviderDto(platform, available, available ? "Connexion disponible selon les autorisations accordées. Publication automatique désactivée." : "Configuration et autorisations du fournisseur requises.");
@@ -95,14 +115,17 @@ public sealed class SocialConnections(DbContextOptions<SocialFlowDbContext> opti
         try
         {
             if (denied || string.IsNullOrWhiteSpace(code)) throw Invalid();
-            var discovered = await Provider(platform).DiscoverAsync(code, verifier, ct);
+            var provider = Provider(platform);
+            var report = provider is IDiagnosticWorkspaceOAuthProvider diagnosticProvider
+                ? await diagnosticProvider.DiscoverWithDiagnosticsAsync(code,ct) : null;
+            var discovered = report?.Candidates ?? await provider.DiscoverAsync(code, verifier, ct);
             if (discovered.Count > 500 || discovered.Any(x => string.IsNullOrWhiteSpace(x.ExternalAccountId) || x.ExternalAccountId.Length > 256 ||
                 string.IsNullOrWhiteSpace(x.Credential.AccessToken) || x.DisplayName.Length > 256 || x.AccountType.Length > 64 || x.Credential.ExpiresAtUtc <= clock.GetUtcNow())) throw Invalid();
             await using var tx = await db.Database.BeginTransactionAsync(ct);
             await Access(db, address.WorkspaceId, WorkspacePermission.ManageSocial, ct);
             if (attempt.ExpiresAtUtc <= clock.GetUtcNow()) throw Invalid();
-            attempt.ProtectedData = Seal(discovered.DistinctBy(x => x.ExternalAccountId).ToArray(), address.WorkspaceId, address.Id, "candidates");
-            attempt.Status = SocialOAuthStatus.Selection; attempt.Revision = Guid.NewGuid();
+            attempt.ProtectedData = Seal(new SocialDiscoveryPayload(discovered.DistinctBy(x => x.ExternalAccountId).ToArray(), report?.Diagnostic), address.WorkspaceId, address.Id, "candidates");
+            attempt.Status = report is { Succeeded: false } ? SocialOAuthStatus.Failed : SocialOAuthStatus.Selection; attempt.Revision = Guid.NewGuid();
             await db.SaveChangesAsync(ct); await tx.CommitAsync(ct);
             return new(address.Id, address.WorkspaceId);
         }
@@ -113,31 +136,57 @@ public sealed class SocialConnections(DbContextOptions<SocialFlowDbContext> opti
             throw new SocialConnectionException(400, "Connexion refusée, expirée ou fournisseur indisponible. Aucun compte n’a été ajouté.");
         }
     }
-    private async Task<SocialOAuthSession> Session(SocialFlowDbContext db, Guid id, CancellationToken ct) =>
-        await db.SocialOAuthSessions.SingleOrDefaultAsync(x => x.Id == id && x.UserId == actor.UserId && x.Status == SocialOAuthStatus.Selection, ct) is { } session && session.ExpiresAtUtc > clock.GetUtcNow()
+    private async Task<SocialOAuthSession> Session(SocialFlowDbContext db, Guid id, CancellationToken ct, bool allowDiagnosticFailure = false) =>
+        await db.SocialOAuthSessions.SingleOrDefaultAsync(x => x.Id == id && x.UserId == actor.UserId &&
+            (x.Status == SocialOAuthStatus.Selection || allowDiagnosticFailure && x.Status == SocialOAuthStatus.Failed && x.ProtectedData != ""), ct) is { } session && session.ExpiresAtUtc > clock.GetUtcNow()
             ? session : throw Invalid();
+    private SocialDiscoveryPayload Discovery(SocialOAuthSession session)
+    {
+        // Existing sessions contain an array. New sessions additionally retain a safe diagnostic.
+        var data = Open<JsonElement>(session.ProtectedData,session.WorkspaceId,session.Id,"candidates");
+        return data.ValueKind == JsonValueKind.Array ? new(data.Deserialize<SocialCandidate[]>()!,null) : data.Deserialize<SocialDiscoveryPayload>()!;
+    }
+    public async Task<SocialDiscoveryDiagnostic?> DiagnosticsAsync(Guid workspaceId, Guid sessionId, CancellationToken ct)
+    {
+        await using var db = Db(workspaceId); await Access(db,workspaceId,WorkspacePermission.ManageSocial,ct);
+        var session = await Session(db,sessionId,ct,true);
+        return Discovery(session).Diagnostic;
+    }
     public async Task<IReadOnlyList<SocialCandidateDto>> CandidatesAsync(Guid workspaceId, Guid sessionId, CancellationToken ct)
     {
         await using var db = Db(workspaceId); await Access(db, workspaceId, WorkspacePermission.ManageSocial, ct);
-        var session = await Session(db, sessionId, ct);
-        return Open<SocialCandidate[]>(session.ProtectedData, workspaceId, sessionId, "candidates")
-            .Select(x => new SocialCandidateDto(x.ExternalAccountId, x.DisplayName, x.AccountType, x.PublishingPermissionGranted)).ToArray();
+        var session = await Session(db, sessionId, ct, true);
+        return Discovery(session).Candidates
+            .Select(x => new SocialCandidateDto(x.ExternalAccountId, x.DisplayName, x.AccountType, x.PublishingPermissionGranted, x.PublishingCapability)).ToArray();
     }
     public async Task SelectAsync(Guid workspaceId, Guid sessionId, IReadOnlyList<string> externalIds, CancellationToken ct)
     {
         if (externalIds.Count is < 1 or > 100 || externalIds.Distinct().Count() != externalIds.Count) throw Invalid();
         await using var db = Db(workspaceId); await using var tx = await db.Database.BeginTransactionAsync(ct);
         await Access(db, workspaceId, WorkspacePermission.ManageSocial, ct); var session = await Session(db, sessionId, ct);
-        var choices = Open<SocialCandidate[]>(session.ProtectedData, workspaceId, sessionId, "candidates");
+        var choices = Discovery(session).Candidates;
         foreach (var id in externalIds)
         {
             var choice = choices.SingleOrDefault(x => x.ExternalAccountId == id) ?? throw Invalid();
             if (choice.Credential.ExpiresAtUtc <= clock.GetUtcNow()) throw Invalid();
-            var connection = await db.SocialConnections.SingleOrDefaultAsync(x => x.Platform == session.Platform && x.ExternalAccountId == id && x.ConnectionStatus != SocialConnectionStatus.Revoked, ct);
+            if (Provider(session.Platform) is FacebookWorkspaceOAuthProvider facebook)
+            {
+                var verified = await facebook.ValidateAsync(id, choice.AccountType, choice.Credential, ct);
+                var evidence = !verified.Scopes.Contains("pages_manage_posts") || !verified.Scopes.Contains("pages_read_engagement")
+                    ? new PublishingCapabilityEvidence(PublishingCapabilityStatus.Denied, "PublishingScopeMissing", "MetaPageTokenInspection", clock.GetUtcNow())
+                    : choice.PublishingCapability ?? new(PublishingCapabilityStatus.Unverified, "PageTaskEvidenceUnavailable", "LegacyOAuthSession", clock.GetUtcNow());
+                choice = choice with { Credential = verified, PublishingCapability = evidence, PublishingPermissionGranted = evidence.Status == PublishingCapabilityStatus.Verified };
+            }
+            // A revoked grant is still the same provider identity. Reuse its ID so post references survive.
+            // The transaction and unconditional unique index serialize concurrent selections.
+            var connection = await db.SocialConnections.SingleOrDefaultAsync(x => x.Platform == session.Platform && x.ExternalAccountId == id, ct);
             if (connection is null) { connection = new() { WorkspaceId = workspaceId, Platform = session.Platform, ExternalAccountId = id }; db.SocialConnections.Add(connection); }
             connection.DisplayName = choice.DisplayName; connection.AccountType = choice.AccountType;
             connection.ConnectedByUserId = actor.UserId; connection.ConnectedAtUtc = clock.GetUtcNow(); connection.LastValidatedAtUtc = clock.GetUtcNow();
             connection.ExpiresAtUtc = choice.Credential.ExpiresAtUtc; connection.PublishingPermissionGranted = choice.PublishingPermissionGranted;
+            ApplyCapability(connection, choice.PublishingCapability ?? new(
+                choice.PublishingPermissionGranted ? PublishingCapabilityStatus.Verified : PublishingCapabilityStatus.Unverified,
+                "ProviderGrant", "OAuthDiscovery", clock.GetUtcNow()));
             connection.ConnectionStatus = SocialConnectionStatus.Connected; connection.Revision = Guid.NewGuid();
             connection.ProtectedCredential = Seal(choice.Credential, workspaceId, connection.Id, "credential");
         }
@@ -155,6 +204,7 @@ public sealed class SocialConnections(DbContextOptions<SocialFlowDbContext> opti
         await using var db = Db(workspaceId); await using var tx = await db.Database.BeginTransactionAsync(ct);
         await Access(db, workspaceId, WorkspacePermission.ManageSocial, ct); var c = await Connection(db, id, revision, ct);
         c.ConnectionStatus = SocialConnectionStatus.Revoked; c.ProtectedCredential = ""; c.PublishingPermissionGranted = false; c.Revision = Guid.NewGuid();
+        ApplyCapability(c, new(PublishingCapabilityStatus.Denied, "ConnectionRevoked", "LocalRevocation", clock.GetUtcNow()));
         // Local revocation avoids revoking a provider grant shared with another workspace.
         await db.SaveChangesAsync(ct); await tx.CommitAsync(ct);
     }
@@ -165,18 +215,44 @@ public sealed class SocialConnections(DbContextOptions<SocialFlowDbContext> opti
         if (string.IsNullOrEmpty(c.ProtectedCredential)) throw new SocialConnectionException(409, "Reconnectez ce compte pour renouveler son autorisation.");
         var credential = Open<SocialCredential>(c.ProtectedCredential, workspaceId, id, "credential");
         SocialCredential? validated = null; var invalid = false;
-        try { validated = await Provider(c.Platform).ValidateAsync(c.ExternalAccountId, c.AccountType, credential, ct); }
+        PublishingCapabilityEvidence? evidence = null;
+        SocialConnectionException? verificationFailure = null;
+        try
+        {
+            var provider = Provider(c.Platform);
+            if (c.Platform == SocialPlatform.Facebook && provider is IPublishingCapabilityValidator validator)
+            {
+                var result = await validator.ValidatePublishingCapabilityAsync(c.ExternalAccountId, c.AccountType, credential, ct);
+                validated = result.Credential; evidence = result.Evidence;
+            }
+            else validated = await provider.ValidateAsync(c.ExternalAccountId, c.AccountType, credential, ct);
+        }
         catch (SocialConnectionException e) when (e.Status == 401) { invalid = true; }
+        catch (SocialConnectionException e) when (c.Platform == SocialPlatform.Facebook && e.Status == 502)
+        { verificationFailure = e; evidence = new(PublishingCapabilityStatus.Unverified, "MetaVerificationUnavailable", "MetaValidation", clock.GetUtcNow()); }
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         await Access(db, workspaceId, WorkspacePermission.ManageSocial, ct);
-        if (invalid) { c.ConnectionStatus = SocialConnectionStatus.ReauthorizationRequired; c.ProtectedCredential = ""; c.PublishingPermissionGranted = false; }
+        if (invalid) {
+            c.ConnectionStatus = SocialConnectionStatus.ReauthorizationRequired; c.ProtectedCredential = "";
+            ApplyCapability(c, new(PublishingCapabilityStatus.Denied, "AuthorizationInvalid", "ProviderValidation", clock.GetUtcNow()));
+        }
+        else if (verificationFailure is not null) ApplyCapability(c, evidence!);
         else {
             c.ProtectedCredential = Seal(validated!, workspaceId, id, "credential"); c.ExpiresAtUtc = validated!.ExpiresAtUtc;
             var permission = c.Platform == SocialPlatform.Facebook ? "pages_manage_posts" : c.Platform == SocialPlatform.Instagram ? "instagram_content_publish" : c.AccountType == "Organization" ? "w_organization_social" : "w_member_social";
-            c.PublishingPermissionGranted &= validated.Scopes.Contains(permission);
+            if (c.Platform == SocialPlatform.Facebook)
+                ApplyCapability(c, evidence ?? new(PublishingCapabilityStatus.Unverified, "PageTaskEvidenceUnavailable", "ProviderValidation", clock.GetUtcNow()));
+            else
+            {
+                // Preserve the established LinkedIn/Instagram authorization rules in this Facebook phase.
+                c.PublishingPermissionGranted &= validated.Scopes.Contains(permission);
+                ApplyCapability(c, new(c.PublishingPermissionGranted ? PublishingCapabilityStatus.Verified : PublishingCapabilityStatus.Denied,
+                    c.PublishingPermissionGranted ? "ProviderGrant" : "PublishingScopeMissing", "ProviderValidation", clock.GetUtcNow()));
+            }
             c.ConnectionStatus = c.ExpiresAtUtc <= clock.GetUtcNow() ? SocialConnectionStatus.Expired : SocialConnectionStatus.Connected;
         }
         c.LastValidatedAtUtc = clock.GetUtcNow(); c.Revision = Guid.NewGuid(); await db.SaveChangesAsync(ct); await tx.CommitAsync(ct);
+        if (verificationFailure is not null) throw verificationFailure;
     }
     public async Task<IReadOnlyList<Guid>> DestinationsAsync(Guid workspaceId, Guid postId, CancellationToken ct)
     {
@@ -193,7 +269,7 @@ public sealed class SocialConnections(DbContextOptions<SocialFlowDbContext> opti
         if (post.Status is not (Redeemer.SocialFlow.Domain.Enums.SocialPostStatus.Draft or Redeemer.SocialFlow.Domain.Enums.SocialPostStatus.Rejected))
             throw new SocialConnectionException(409, "Les destinations ne peuvent être modifiées que sur un brouillon ou un contenu rejeté.");
         var connections = await db.SocialConnections.Where(x => ids.Contains(x.Id)).ToListAsync(ct);
-        if (connections.Count != ids.Count || connections.Any(x => x.Platform != post.Platform || Status(x) != SocialConnectionStatus.Connected || !x.PublishingPermissionGranted)) throw Missing();
+        if (connections.Count != ids.Count || connections.Any(x => x.Platform != post.Platform || Status(x) != SocialConnectionStatus.Connected || !x.CanPublish)) throw Missing();
         db.PostSocialDestinations.RemoveRange(await db.PostSocialDestinations.Where(x => x.SocialPostId == postId).ToListAsync(ct));
         await db.SaveChangesAsync(ct);
         db.PostSocialDestinations.AddRange(ids.Select(id => new PostSocialDestination { WorkspaceId = workspaceId, SocialPostId = postId, SocialConnectionId = id }));

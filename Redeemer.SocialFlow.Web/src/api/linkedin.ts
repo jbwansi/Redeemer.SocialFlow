@@ -24,6 +24,10 @@ export interface PublicationOperation {
 export interface PublicationView {
   operation: PublicationOperation | null
   canPublish: boolean
+  blockReason?: string | null
+  manualBlockReason?: string | null
+  automaticAuthorized?: boolean
+  workerEnabled?: boolean
 }
 export interface PublicationPreview {
   content: string

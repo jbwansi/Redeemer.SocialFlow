@@ -2,6 +2,7 @@ using Redeemer.SocialFlow.Domain.Enums;
 namespace Redeemer.SocialFlow.Domain.Entities;
 
 public enum SocialConnectionStatus { Connected = 1, Expired = 2, Revoked = 3, ReauthorizationRequired = 4 }
+public enum PublishingCapabilityStatus { Unverified = 0, Verified = 1, Denied = 2 }
 public sealed class SocialConnection : IWorkspaceResource
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -17,6 +18,15 @@ public sealed class SocialConnection : IWorkspaceResource
     public DateTimeOffset? LastValidatedAtUtc { get; set; }
     public string ProtectedCredential { get; set; } = "";
     public bool PublishingPermissionGranted { get; set; }
+    public PublishingCapabilityStatus? PublishingCapabilityStatus { get; set; }
+    public string? PublishingCapabilityReason { get; set; }
+    public string? PublishingCapabilitySource { get; set; }
+    public DateTimeOffset? PublishingCapabilityCheckedAtUtc { get; set; }
+    public string? PublishingCapabilityTask { get; set; }
+    // Null is reserved for legacy rows. Explicit negative/unknown evidence always blocks.
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public bool CanPublish => PublishingPermissionGranted &&
+        (PublishingCapabilityStatus is null or global::Redeemer.SocialFlow.Domain.Entities.PublishingCapabilityStatus.Verified);
     public Guid Revision { get; set; } = Guid.NewGuid();
 }
 public enum SocialOAuthStatus { Started = 1, Exchanging = 2, Selection = 3, Completed = 4, Failed = 5 }

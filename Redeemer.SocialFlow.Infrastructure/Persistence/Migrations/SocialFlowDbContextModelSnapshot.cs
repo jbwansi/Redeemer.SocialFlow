@@ -212,6 +212,52 @@ namespace Redeemer.SocialFlow.Infrastructure.Persistence.Migrations
                     b.ToTable("KnowledgeDocuments", (string)null);
                 });
 
+            modelBuilder.Entity("Redeemer.SocialFlow.Domain.Entities.LinkedInAutomation", b =>
+                {
+                    b.Property<Guid>("WorkspaceId")
+                        .IsConcurrencyToken()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("SocialPostId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("AuthorizedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AuthorizedByUserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("BlockReason")
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("PostUpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("ScheduledAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("SocialConnectionId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("State")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("WorkspaceId", "SocialPostId");
+
+                    b.HasIndex("WorkspaceId");
+
+                    b.HasIndex("WorkspaceId", "SocialConnectionId");
+
+                    b.ToTable("LinkedInAutomations");
+                });
+
             modelBuilder.Entity("Redeemer.SocialFlow.Domain.Entities.PostSocialDestination", b =>
                 {
                     b.Property<Guid>("WorkspaceId")
@@ -410,6 +456,24 @@ namespace Redeemer.SocialFlow.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTimeOffset?>("PublishingCapabilityCheckedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PublishingCapabilityReason")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PublishingCapabilitySource")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("PublishingCapabilityStatus")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("PublishingCapabilityTask")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
                     b.Property<bool>("PublishingPermissionGranted")
                         .HasColumnType("INTEGER");
 
@@ -426,8 +490,7 @@ namespace Redeemer.SocialFlow.Infrastructure.Persistence.Migrations
                     b.HasIndex("WorkspaceId");
 
                     b.HasIndex("WorkspaceId", "Platform", "ExternalAccountId")
-                        .IsUnique()
-                        .HasFilter("ConnectionStatus <> 3");
+                        .IsUnique();
 
                     b.ToTable("SocialConnections");
                 });
@@ -813,6 +876,29 @@ namespace Redeemer.SocialFlow.Infrastructure.Persistence.Migrations
                     b.HasOne("Redeemer.SocialFlow.Domain.Entities.Workspace", null)
                         .WithMany()
                         .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Redeemer.SocialFlow.Domain.Entities.LinkedInAutomation", b =>
+                {
+                    b.HasOne("Redeemer.SocialFlow.Domain.Entities.Workspace", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Redeemer.SocialFlow.Domain.Entities.SocialConnection", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "SocialConnectionId")
+                        .HasPrincipalKey("WorkspaceId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Redeemer.SocialFlow.Domain.Entities.SocialPost", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "SocialPostId")
+                        .HasPrincipalKey("WorkspaceId", "Id")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

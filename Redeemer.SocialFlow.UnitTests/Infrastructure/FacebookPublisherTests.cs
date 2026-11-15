@@ -26,6 +26,7 @@ public sealed class FacebookPublisherTests
     }
     [Theory]
     [InlineData(200,"{}",3)]
+    [InlineData(200,"{\"post_id\":\"123_789\",\"error\":{\"code\":190}}",3)]
     [InlineData(200,"{\"id\":\"123_789\"}",3)]
     [InlineData(200,"{\"post_id\":\"999_789\"}",3)]
     [InlineData(400,"{\"error\":{\"code\":190}}",2)]

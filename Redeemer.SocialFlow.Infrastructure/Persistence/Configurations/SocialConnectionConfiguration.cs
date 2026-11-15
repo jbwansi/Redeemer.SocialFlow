@@ -10,7 +10,10 @@ public sealed class SocialConnectionConfiguration : IEntityTypeConfiguration<Soc
         b.Property(x => x.ExternalAccountId).HasMaxLength(256);
         b.Property(x => x.DisplayName).HasMaxLength(256); b.Property(x => x.AccountType).HasMaxLength(64);
         b.Property(x => x.ConnectedByUserId).HasMaxLength(450); b.Property(x => x.Revision).IsConcurrencyToken();
-        b.HasIndex(x => new { x.WorkspaceId, x.Platform, x.ExternalAccountId }).IsUnique().HasFilter("ConnectionStatus <> 3");
+        b.Property(x => x.PublishingCapabilityReason).HasMaxLength(64);
+        b.Property(x => x.PublishingCapabilitySource).HasMaxLength(64);
+        b.Property(x => x.PublishingCapabilityTask).HasMaxLength(64);
+        b.HasIndex(x => new { x.WorkspaceId, x.Platform, x.ExternalAccountId }).IsUnique();
     }
 }
 public sealed class SocialOAuthSessionConfiguration : IEntityTypeConfiguration<SocialOAuthSession>

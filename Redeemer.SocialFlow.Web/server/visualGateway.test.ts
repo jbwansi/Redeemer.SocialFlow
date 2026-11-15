@@ -114,6 +114,7 @@ describe('local server gateway', () => {
       },
     },
     { method: 'POST' },
+    { method: 'POST', headers: { host: 'localhost:5173', 'x-socialflow-local': '1', origin: 'http://localhost:5173' } },
   ])('rejects non-local or CSRF request %#', (overrides) =>
     expect(isLocalRequest(incoming(overrides))).toBe(false),
   )
@@ -124,7 +125,7 @@ describe('local server gateway', () => {
           method: 'POST',
           headers: {
             host: '127.0.0.1:5173',
-            origin: 'http://127.0.0.1:5173',
+            origin: 'https://127.0.0.1:5173',
             'x-socialflow-local': '1',
           },
         }),
@@ -170,7 +171,7 @@ describe('local server gateway', () => {
     const large = await send(path + '/generate', {
       method: 'POST',
       body: 'x'.repeat(65537),
-      headers: { Origin: 'http://127.0.0.1:5173', 'Content-Type': 'application/json' },
+      headers: { Origin: 'https://127.0.0.1:5173', 'Content-Type': 'application/json' },
     })
     expect(large.status).toBe(413)
     expect(request).not.toHaveBeenCalled()

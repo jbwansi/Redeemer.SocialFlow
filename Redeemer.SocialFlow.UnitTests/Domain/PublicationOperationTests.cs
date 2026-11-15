@@ -46,6 +46,23 @@ public sealed class PublicationOperationTests
         Assert.Equal(SocialPostStatus.Scheduled, post.Status); // operation entity never transitions the post itself
     }
 
+    [Theory]
+    [InlineData(SocialPlatform.Facebook)] [InlineData(SocialPlatform.LinkedIn)]
+    public void ExplicitManualClaimAcceptsApprovedWithoutInventingSchedule(SocialPlatform platform)
+    {
+        var clock = new Clock();
+        var post = SocialPost.Create("Title", "Content", platform, clock);
+        Assert.Throws<DomainException>(() => PublicationOperation.Claim(post, Guid.NewGuid(), platform.ToString(), "target", clock, publishApproved: true));
+        post.SubmitForReview();
+        Assert.Throws<DomainException>(() => PublicationOperation.Claim(post, Guid.NewGuid(), platform.ToString(), "target", clock, publishApproved: true));
+        post.Approve();
+        Assert.Throws<DomainException>(() => post.MarkAsPublished(clock));
+        var operation = PublicationOperation.Claim(post, Guid.NewGuid(), platform.ToString(), "target", clock, publishApproved: true);
+        Assert.Equal(post.Content, operation.Content); Assert.Null(post.ScheduledAt);
+        post.Schedule(clock.Now.AddHours(1));
+        Assert.Throws<DomainException>(() => PublicationOperation.Claim(post, Guid.NewGuid(), platform.ToString(), "target", clock, publishApproved: true));
+    }
+
     private sealed class Clock : TimeProvider
     {
         public DateTimeOffset Now { get; set; } = new(2030, 1, 1, 0, 0, 0, TimeSpan.Zero);

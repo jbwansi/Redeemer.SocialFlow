@@ -11,7 +11,9 @@ namespace Redeemer.SocialFlow.Api.Development.LinkedIn;
 public sealed record LinkedInPublicationSettings(bool Enabled, bool WorkerEnabled);
 public sealed record LinkedInRuntime(bool Connected, DateTimeOffset? ExpiresAt, string? Destination,
     bool PublicationEnabled, bool WorkerEnabled, int WorkerIntervalSeconds, string ConnectUrl);
-public sealed record LinkedInPublicationView(PublicationOperationDto? Operation, bool CanPublish);
+public sealed record LinkedInPublicationView(PublicationOperationDto? Operation, bool CanPublish,
+    string? BlockReason = null, bool AutomaticAuthorized = false, bool WorkerEnabled = false,
+    string? ManualBlockReason = null);
 public sealed record LinkedInPreview(string Content, string Destination, string Confirmation);
 internal sealed record PublicationConfirmation(Guid PostId, Guid OperationId, string Content, string Destination, DateTimeOffset ExpiresAt, Guid? VisualId = null);
 public sealed class LinkedInPublicationException(int status) : Exception

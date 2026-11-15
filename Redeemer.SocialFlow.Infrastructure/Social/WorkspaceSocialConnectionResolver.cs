@@ -12,7 +12,7 @@ public sealed class WorkspaceSocialConnectionResolver(DbContextOptions<SocialFlo
         if (access.WorkspaceId != workspaceId) return null;
         await using var db = new SocialFlowDbContext(options, access);
         var connection = await db.SocialConnections.AsNoTracking().SingleOrDefaultAsync(x => x.Id == connectionId, token);
-        return connection is { ConnectionStatus: SocialConnectionStatus.Connected, PublishingPermissionGranted: true } && !(connection.ExpiresAtUtc <= clock.GetUtcNow())
+        return connection is { ConnectionStatus: SocialConnectionStatus.Connected, CanPublish: true } && !(connection.ExpiresAtUtc <= clock.GetUtcNow())
             ? new(workspaceId, connection.Id, connection.Platform.ToString()) : null;
     }
 }

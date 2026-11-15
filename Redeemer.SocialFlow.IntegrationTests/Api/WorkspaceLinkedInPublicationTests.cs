@@ -81,9 +81,12 @@ public sealed partial class WorkspaceIsolationTests
     [InlineData(HttpStatusCode.Created, PublicationOperationState.Confirmed)]
     [InlineData(HttpStatusCode.Forbidden, PublicationOperationState.Failed)]
     [InlineData(HttpStatusCode.InternalServerError, PublicationOperationState.Indeterminate)]
-    public async Task WorkspaceLinkedIn_ReusesPublisherAndDurableOperationWithoutResending(HttpStatusCode status, PublicationOperationState expected)
+    [InlineData(HttpStatusCode.Created, PublicationOperationState.Confirmed, true)]
+    [InlineData(HttpStatusCode.Forbidden, PublicationOperationState.Failed, true)]
+    [InlineData(HttpStatusCode.InternalServerError, PublicationOperationState.Indeterminate, true)]
+    public async Task WorkspaceLinkedIn_ReusesPublisherAndDurableOperationWithoutResending(HttpStatusCode status, PublicationOperationState expected, bool approvedOnly = false)
     {
-        var data = await LinkedInData(a.Id); linkedInDispatch.Status = status;
+        var data = await LinkedInData(a.Id, approvedOnly: approvedOnly); linkedInDispatch.Status = status;
         var response = await Send(alice, HttpMethod.Post, Manual(data.Post, "preview"), new { connectionId = data.Connection });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var preview = (await response.Content.ReadFromJsonAsync<LinkedInPreview>())!;
@@ -95,6 +98,13 @@ public sealed partial class WorkspaceIsolationTests
         Assert.Equal(expected, operation.State);
         await using var db = Db(a.Id);
         Assert.Equal(operation.OperationId, (await db.PublicationOperations.SingleAsync()).OperationId);
+        if (approvedOnly)
+        {
+            var post = await db.SocialPosts.SingleAsync();
+            Assert.Null(post.ScheduledAt);
+            Assert.Equal(expected == PublicationOperationState.Confirmed ? SocialPostStatus.Published :
+                expected == PublicationOperationState.Failed ? SocialPostStatus.Failed : SocialPostStatus.Approved, post.Status);
+        }
         Assert.DoesNotContain("workspace-secret", await results[0].Content.ReadAsStringAsync());
         Assert.Equal(HttpStatusCode.NotFound, (await bob.GetAsync(Manual(data.Post, "publication"))).StatusCode);
     }

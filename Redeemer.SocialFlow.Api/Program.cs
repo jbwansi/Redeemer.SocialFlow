@@ -16,6 +16,12 @@ Redeemer.SocialFlow.Infrastructure.Social.SocialDependencyInjection.AddWorkspace
 builder.Services.AddHttpClient("WorkspaceLinkedInPublication", client => client.Timeout = TimeSpan.FromSeconds(30))
     .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })
     .RemoveAllLoggers();
+builder.Services.AddScoped<Redeemer.SocialFlow.Api.Publishing.WorkspacePublicationService>();
+builder.Services.AddHttpClient("WorkspaceFacebookPublication", client => client.Timeout = TimeSpan.FromSeconds(60))
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })
+    .RemoveAllLoggers();
+if (builder.Configuration.GetValue<bool>("SocialConnections:Publication:WorkerEnabled"))
+    builder.Services.AddHostedService<LinkedInPublicationWorker>();
 // Incoming OAuth codes must not enter framework request/endpoint diagnostics, including Production.
 builder.Logging.AddFilter("Microsoft.AspNetCore", LogLevel.Warning);
 // Authentication phase never starts historical automatic publishers, even with inherited flags.

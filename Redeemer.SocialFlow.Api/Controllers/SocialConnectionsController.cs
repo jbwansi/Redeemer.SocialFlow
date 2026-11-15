@@ -19,6 +19,8 @@ public sealed class SocialConnectionsController(ISocialConnections connections) 
     public async Task<IActionResult> Start(Guid workspaceId,StartSocialRequest request,CancellationToken ct) => Ok(new { authorizationUrl=await connections.StartAsync(workspaceId,request.Platform,ct) });
     [HttpGet("sessions/{sessionId:guid}")]
     public async Task<IActionResult> Candidates(Guid workspaceId,Guid sessionId,CancellationToken ct) => Ok(await connections.CandidatesAsync(workspaceId,sessionId,ct));
+    [HttpGet("sessions/{sessionId:guid}/diagnostics")]
+    public async Task<IActionResult> Diagnostics(Guid workspaceId,Guid sessionId,CancellationToken ct) => new JsonResult(await connections.DiagnosticsAsync(workspaceId,sessionId,ct));
     [HttpPost("sessions/{sessionId:guid}/select")]
     public async Task<IActionResult> Select(Guid workspaceId,Guid sessionId,SelectSocialRequest request,CancellationToken ct)
     { await connections.SelectAsync(workspaceId,sessionId,request.ExternalAccountIds,ct); return NoContent(); }
@@ -48,7 +50,7 @@ public sealed class SocialOAuthCallbackController(ISocialConnections connections
         try {
             var session=await connections.CallbackAsync(platform,values["state"].ToString(),values["code"].FirstOrDefault(),values.ContainsKey("error"),ct);
             // Only an opaque discovery ID enters the SPA, never codes, state, or tokens.
-            return Redirect("/#social-connections?session="+session.SessionId+"&workspace="+session.WorkspaceId);
+            return Redirect("/#social-connections?session="+session.SessionId+"&workspace="+session.WorkspaceId+"&platform="+(int)platform);
         }
         catch(SocialConnectionException) { return Redirect("/#social-connections?oauth=failed"); }
     }

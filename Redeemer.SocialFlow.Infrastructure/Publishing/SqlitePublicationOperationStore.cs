@@ -19,6 +19,10 @@ public sealed class SqlitePublicationOperationStore(DbContextOptions<SocialFlowD
         // Microsoft.Data.Sqlite's default transaction takes the write reservation immediately.
         // Eligibility, existing-operation check and insert are serialized across contexts/processes.
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        // Only an authenticated, explicitly confirmed workspace manual request may claim Approved.
+        // Workers and legacy callers retain the scheduled-only default.
+        if (request.PublishApproved && (request.WorkspaceProof is null || request.AutomaticPlanRevision is not null))
+            throw new DomainException("Immediate publication requires a workspace manual confirmation.");
         if (request.AutomaticPlanRevision is { } planRevision)
         {
             var plan = await db.LinkedInAutomations.AsNoTracking().SingleOrDefaultAsync(x => x.SocialPostId == request.PostId, cancellationToken);
@@ -37,16 +41,18 @@ public sealed class SqlitePublicationOperationStore(DbContextOptions<SocialFlowD
                 !await db.Workspaces.AnyAsync(x => x.Id == db.ActiveWorkspaceId && x.Status == WorkspaceStatus.Active, cancellationToken))
                 throw new SocialConnectionException(403, "Permission de publication insuffisante.");
             var connection = await db.SocialConnections.SingleOrDefaultAsync(x => x.Id == proof.ConnectionId, cancellationToken);
-            if (connection is null || connection.Revision != proof.ConnectionRevision || connection.Platform != SocialPlatform.LinkedIn ||
-                connection.AccountType != "Profile" || connection.ConnectionStatus != SocialConnectionStatus.Connected ||
-                !connection.PublishingPermissionGranted || connection.ExpiresAtUtc is null || connection.ExpiresAtUtc <= (timeProvider ?? TimeProvider.System).GetUtcNow() ||
-                request.Destination != "urn:li:person:" + connection.ExternalAccountId)
-                throw new SocialConnectionException(409, "La connexion LinkedIn a changé ou n’est plus autorisée.");
+            var facebook = request.Provider == "Facebook";
+            var platform = facebook ? SocialPlatform.Facebook : SocialPlatform.LinkedIn;
+            if ((!facebook && request.Provider != "LinkedIn") || connection is null || connection.Revision != proof.ConnectionRevision || connection.Platform != platform ||
+                connection.AccountType != (facebook ? "Page" : "Profile") || connection.ConnectionStatus != SocialConnectionStatus.Connected ||
+                !connection.CanPublish || (!facebook && connection.ExpiresAtUtc is null) || connection.ExpiresAtUtc <= (timeProvider ?? TimeProvider.System).GetUtcNow() ||
+                request.Destination != (facebook ? connection.ExternalAccountId : "urn:li:person:" + connection.ExternalAccountId))
+                throw new SocialConnectionException(409, "La connexion a changé ou n’est plus autorisée.");
             var confirmed = await db.SocialPosts.AsNoTracking().SingleOrDefaultAsync(x => x.Id == request.PostId, cancellationToken);
             if (confirmed is null) throw new PostNotFoundException(request.PostId);
             // An existing durable result may be read again after completion updated the post.
             if (!await db.PublicationOperations.AnyAsync(x => x.SocialPostId == request.PostId, cancellationToken) &&
-                (confirmed.Platform != SocialPlatform.LinkedIn || confirmed.Content != proof.Content || confirmed.SelectedVisualId != proof.VisualId || confirmed.UpdatedAt != proof.UpdatedAt))
+                (confirmed.Platform != platform || confirmed.Content != proof.Content || confirmed.SelectedVisualId != proof.VisualId || confirmed.UpdatedAt != proof.UpdatedAt))
                 throw new SocialConnectionException(409, "La publication a changé. Confirmez à nouveau son contenu.");
         }
         var existing = await db.PublicationOperations.SingleOrDefaultAsync(x => x.OperationId == request.OperationId, cancellationToken);
@@ -58,7 +64,7 @@ public sealed class SqlitePublicationOperationStore(DbContextOptions<SocialFlowD
             ?? throw new PostNotFoundException(request.PostId);
         var visual = post.SelectedVisualId is null ? null : await db.PostVisuals.AsNoTracking()
             .SingleOrDefaultAsync(v => v.Id == post.SelectedVisualId, cancellationToken);
-        var operation = PublicationOperation.Claim(post, request.OperationId, request.Provider, request.Destination, timeProvider, visual);
+        var operation = PublicationOperation.Claim(post, request.OperationId, request.Provider, request.Destination, timeProvider, visual, request.PublishApproved);
         db.PublicationOperations.Add(operation);
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -83,8 +89,9 @@ public sealed class SqlitePublicationOperationStore(DbContextOptions<SocialFlowD
         {
             var post = await db.SocialPosts.SingleOrDefaultAsync(x => x.Id == operation.SocialPostId, cancellationToken)
                 ?? throw new PostNotFoundException(operation.SocialPostId);
-            if (state == PublicationOperationState.Confirmed) post.MarkAsPublished(timeProvider);
-            else post.MarkAsFailed(timeProvider);
+            // The durable claim already validated editorial eligibility before dispatch.
+            if (state == PublicationOperationState.Confirmed) post.MarkAsPublished(timeProvider, allowApproved: true);
+            else post.MarkAsFailed(timeProvider, allowApproved: true);
         }
         operation.Complete(state, result.ExternalId, timeProvider);
         await db.SaveChangesAsync(cancellationToken);

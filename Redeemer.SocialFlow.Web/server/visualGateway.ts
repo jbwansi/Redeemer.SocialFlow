@@ -59,7 +59,7 @@ export function isLocalRequest(req: IncomingMessage): boolean {
   if (req.headers['x-socialflow-local'] !== '1') return false
   const site = req.headers['sec-fetch-site']
   if (site && site !== 'same-origin') return false
-  const expected = 'http://' + host
+  const expected = 'https://' + host
   if (req.headers.origin && req.headers.origin !== expected) return false
   // Origin plus a non-simple header prevents CSRF; no CORS responses are emitted.
   if (req.method !== 'GET' && req.headers.origin !== expected) return false

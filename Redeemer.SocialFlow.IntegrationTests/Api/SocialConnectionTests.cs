@@ -13,6 +13,19 @@ public sealed partial class WorkspaceIsolationTests
 {
     private readonly FakeWorkspaceOAuth socialProvider = new();
     [Fact]
+    public async Task OtherAdministratorCannotReadOrSelectAnotherUsersDiscovery()
+    {
+        var workspace = await Organization();
+        await using (var db = Db(workspace)) { db.WorkspaceMemberships.Add(WorkspaceMembership.Join(workspace,bobId,WorkspaceRole.Admin)); await db.SaveChangesAsync(); }
+        var state = await OAuthStart(alice,workspace);
+        Assert.Contains("oauth=failed", (await bob.GetAsync("/api/social-oauth/1/callback?state="+state+"&code=fake")).Headers.Location!.ToString());
+        var session = await OAuthCallback(alice,state);
+        Assert.Equal(HttpStatusCode.BadRequest,(await bob.GetAsync(Social(workspace)+$"/sessions/{session}")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,(await Send(bob,HttpMethod.Post,Social(workspace)+$"/sessions/{session}/select",new { externalAccountIds=new[]{"page-one"} })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,(await Send(alice,HttpMethod.Post,Social(a.Id)+$"/sessions/{session}/select",new { externalAccountIds=new[]{"page-one"} })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent,(await Send(alice,HttpMethod.Post,Social(workspace)+$"/sessions/{session}/select",new { externalAccountIds=new[]{"page-one"} })).StatusCode);
+    }
+    [Fact]
     public async Task ReconnectionUpdatesConfirmedPermissionsWithoutDuplicatingOrChangingOtherWorkspaces()
     {
         socialProvider.Publishing = false;
@@ -99,6 +112,8 @@ public sealed partial class WorkspaceIsolationTests
         var id=await Organization();
         await using(var db=Db(id)) { db.WorkspaceMemberships.Add(WorkspaceMembership.Join(id,bobId,role)); await db.SaveChangesAsync(); }
         Assert.Equal(HttpStatusCode.OK,(await bob.GetAsync(Social(id))).StatusCode);
+        var capabilities = await bob.GetFromJsonAsync<SocialProviderDto[]>(Social(id)+"/providers");
+        if (!manage) Assert.All(capabilities!, p => Assert.DoesNotContain("configuration",p.Message,StringComparison.OrdinalIgnoreCase));
         Assert.Equal(manage?HttpStatusCode.OK:HttpStatusCode.Forbidden,(await Send(bob,HttpMethod.Post,Social(id)+"/start",new {platform=1})).StatusCode);
         if(!manage) {
             var connection=(await Connect(alice,id))[0];

@@ -37,11 +37,15 @@ it('requires explicit eligible profile selection and confirmation before sending
   await waitFor(() => expect(api.publish).toHaveBeenCalledTimes(1))
   expect(await screen.findByText('Publication confirmée')).toBeInTheDocument()
 })
-it('offers profile selection on an approved post but preserves scheduling requirements', async () => {
-  api.publication.mockResolvedValue({ operation: null, canPublish: false })
+it('offers immediate manual confirmation on an approved post with an explicit profile', async () => {
+  api.publication.mockResolvedValue({ operation: null, canPublish: true })
   show(true, 3)
   expect(await screen.findByLabelText(/Profil LinkedIn destinataire/)).toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Publier sur LinkedIn' })).toBeDisabled()
+  await screen.findByRole('option', { name: /Allowed profile/ })
+  await userEvent.selectOptions(screen.getByLabelText(/Profil LinkedIn destinataire/), 'profile')
+  await userEvent.click(screen.getByRole('button', { name: 'Publier sur LinkedIn' }))
+  expect(await screen.findByRole('button', { name: 'Confirmer la publication' })).toBeEnabled()
   expect(api.publish).not.toHaveBeenCalled()
 })
 it('does not expose manual publishing to a Viewer', () => {

@@ -38,13 +38,16 @@ try {
     $apiInfo.EnvironmentVariables['Logging__Console__LogLevel__Redeemer.SocialFlow.Infrastructure.Publishing.Facebook.FacebookGraphClient'] = 'Information'
     $apiInfo.EnvironmentVariables['Logging__Console__LogLevel__Redeemer.SocialFlow.Api.Controllers.FacebookOAuthController'] = 'Information'
     $apiInfo.EnvironmentVariables['Logging__Console__LogLevel__Redeemer.SocialFlow.Api.Controllers.DevFacebookController'] = 'Information'
-    $webInfo = New-LocalProcessInfo 'node' 'node_modules/vite/bin/vite.js --mode development --host 127.0.0.1 --port 5173 --strictPort' $webDirectory $secret $certificate
+    $https = Export-LocalHttpsCertificate $directory
+    $webInfo = New-LocalProcessInfo 'node' 'node_modules/vite/bin/vite.js --mode development --host localhost --port 5173 --strictPort' $webDirectory $secret $certificate
+    $webInfo.EnvironmentVariables['SOCIALFLOW_HTTPS_CERT'] = $https.Certificate
+    $webInfo.EnvironmentVariables['SOCIALFLOW_HTTPS_KEY'] = $https.Key
     $api = [Diagnostics.Process]::Start($apiInfo)
     $pumps += @(New-LocalOutputPump $api 'API')
     $web = [Diagnostics.Process]::Start($webInfo)
     $pumps += @(New-LocalOutputPump $web 'Vite')
     Write-Host "API launcher PID: $($api.Id). dotnet run builds current sources before starting (no --no-build)."
-    Write-Host 'Accounts (built SPA): https://localhost:65474 | Local administration: http://127.0.0.1:5173'
+    Write-Host 'Accounts (built SPA): https://localhost:65474 | Frontend Development: https://localhost:5173'
     Write-Host 'Accounts require a manually initialized separate Identity database. No migration runs at startup.'
     Write-Host 'Automatic publication disabled. Keep this terminal open; Ctrl+C stops both servers.'
     while (!$api.HasExited -and !$web.HasExited) {

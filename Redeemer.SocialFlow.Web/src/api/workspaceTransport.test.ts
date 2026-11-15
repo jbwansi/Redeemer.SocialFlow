@@ -3,6 +3,18 @@ import { apiRequest } from './posts'
 import { setActiveWorkspace } from './workspaceTransport'
 
 afterEach(() => setActiveWorkspace(null))
+it('sends workspace mutations with authenticated cookies and CSRF protection', async () => {
+  const fetcher = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({ token: 'csrf-test' })))
+    .mockResolvedValueOnce(new Response(null, { status: 204 }))
+  vi.stubGlobal('fetch', fetcher)
+  setActiveWorkspace('holding')
+  await apiRequest('/posts/post-id/approve', { method: 'POST' })
+  expect(fetcher).toHaveBeenCalledTimes(2)
+  expect(fetcher).toHaveBeenLastCalledWith('/api/posts/post-id/approve', expect.objectContaining({
+    method: 'POST', credentials: 'same-origin',
+    headers: expect.objectContaining({ 'X-Workspace-Id': 'holding', 'X-CSRF-TOKEN': 'csrf-test' }),
+  }))
+})
 it('binds requests to the workspace and rejects a late response even if fetch ignores cancellation', async () => {
   let finish!: (value: Response) => void
   vi.stubGlobal(

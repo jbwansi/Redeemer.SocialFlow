@@ -75,6 +75,20 @@ function Export-LocalCertificate([string] $Directory) {
     return $path
 }
 
+function Export-LocalHttpsCertificate([string] $Directory) {
+    Initialize-PrivateDirectory $Directory
+    & dotnet dev-certs https --check --trust --quiet
+    if ($LASTEXITCODE -ne 0) { throw 'Trusted development certificate missing. Run dotnet dev-certs https --trust, then restart.' }
+    $cert = Join-Path $Directory 'vite-localhost.pem'
+    $key = Join-Path $Directory 'vite-localhost.key'
+    Assert-RegularPath $cert
+    Assert-RegularPath $key
+    # Private key stays in a user/SYSTEM-only directory outside the repository.
+    & dotnet dev-certs https --export-path $cert --format PEM --no-password --quiet
+    if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $key)) { throw 'HTTPS certificate/key export failed.' }
+    return @{ Certificate = $cert; Key = $key }
+}
+
 function New-LocalProcessInfo([string] $Executable, [string] $Arguments, [string] $Directory,
     [string] $Secret, [string] $Certificate) {
     if (!(Test-Path -LiteralPath $Certificate -PathType Leaf)) { throw 'Public certificate is missing.' }
@@ -95,6 +109,8 @@ function New-LocalProcessInfo([string] $Executable, [string] $Arguments, [string
     $info.EnvironmentVariables['NODE_ENV'] = 'development'
     # This local launcher never starts automatic publication, regardless of inherited settings.
     $info.EnvironmentVariables['Facebook__WorkerEnabled'] = 'false'
+    $info.EnvironmentVariables['SocialConnections__Publication__WorkerEnabled'] = 'false'
+    $info.EnvironmentVariables['SocialConnections__Providers__Facebook__PublicationEnabled'] = 'false'
     $info.EnvironmentVariables['LinkedIn__WorkerEnabled'] = 'false'
     $info.EnvironmentVariables['LocalAdministration__Enabled'] = 'true'
     $info.EnvironmentVariables['Authentication__PublicOrigin'] = 'https://localhost:65474'
@@ -122,6 +138,6 @@ function Receive-LocalOutput($Pumps) {
     }
 }
 
-Export-ModuleMember -Function Get-LocalAdminSecret, Export-LocalCertificate, New-LocalProcessInfo, New-LocalOutputPump, Receive-LocalOutput
+Export-ModuleMember -Function Get-LocalAdminSecret, Export-LocalCertificate, Export-LocalHttpsCertificate, New-LocalProcessInfo, New-LocalOutputPump, Receive-LocalOutput
 
 

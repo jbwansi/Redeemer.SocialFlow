@@ -3,6 +3,12 @@
 The Clean Architecture solution is `Redeemer.SocialFlow.slnx`. Its runnable host is
 `Redeemer.SocialFlow.Api`; the older `Redeemer.SocialFlow` web template is outside the solution.
 
+Local cleanup decisions and retained compatibility paths are documented in
+[the cleanup review](docs/local-cleanup-review.md). The unused weather sample and
+temporary Facebook Business permission probes have been retired. Workspace
+publishing, its worker configuration, migrations, and the opt-in Development
+`--seed-knowledge-test=true` command are retained.
+
 Phase 1 account authentication is implemented. See [setup, first account and access boundaries](docs/phase-1-authentication.md) and [delivery results](docs/phase-1-delivery.md). Accounts use a separate Identity database; ordinary users cannot access historical global data. Existing business migration commands below are not required to initialize accounts.
 
 ## Local persistence

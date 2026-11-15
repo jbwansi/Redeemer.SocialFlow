@@ -1,4 +1,5 @@
 import { visualRequest } from './visuals'
+import { apiRequest } from './posts'
 import type { PublicationOperation, PublicationPreview, PublicationView } from './linkedin'
 export interface FacebookRuntime {
   connected: boolean
@@ -13,6 +14,13 @@ export interface FacebookRuntime {
   pages: { id: string; name: string }[] | null
 }
 const root = '/dev/facebook'
+export const workspaceFacebookApi = (connectionId: string) => ({
+  publication: (id: string, signal?: AbortSignal) => apiRequest<PublicationView>(`/facebook/posts/${encodeURIComponent(id)}/publication`, { signal }),
+  preview: (id: string) => apiRequest<PublicationPreview>(`/facebook/posts/${encodeURIComponent(id)}/preview`, { method: 'POST', body: JSON.stringify({ connectionId }) }),
+  publish: (id: string, confirmation: string) => apiRequest<PublicationOperation>(`/facebook/posts/${encodeURIComponent(id)}/publish`, { method: 'POST', body: JSON.stringify({ confirmation }) }),
+  authorize: (id: string) => apiRequest<void>(`/facebook/posts/${encodeURIComponent(id)}/automatic`, { method: 'POST', body: JSON.stringify({ connectionId }) }),
+  cancelAutomatic: (id: string) => apiRequest<void>(`/facebook/posts/${encodeURIComponent(id)}/automatic`, { method: 'DELETE' }),
+})
 const path = (id: string) => root + '/posts/' + encodeURIComponent(id)
 const post = <T>(url: string, body: unknown) =>
   visualRequest<T>(url, { method: 'POST', body: JSON.stringify(body) })

@@ -96,6 +96,13 @@ public sealed class SocialConnectionSecurityTests
     {
         var scopes="pages_show_list pages_read_engagement pages_manage_posts instagram_basic instagram_content_publish";
         var handler=new FakeHttp(async request=>{
+            if (request.RequestUri!.AbsolutePath.EndsWith("debug_token"))
+            {
+                var token = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(request.RequestUri.Query)["input_token"].ToString();
+                return System.Text.Json.JsonSerializer.Serialize(new { data = new { is_valid = true, app_id = "app-id", type = token.StartsWith("page-") ? "PAGE" : "USER", expires_at = DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeSeconds(), scopes = scopes.Split(' ') } });
+            }
+            if (request.RequestUri.AbsolutePath.EndsWith("/p1")) return """{"id":"p1"}""";
+            if (request.RequestUri.AbsolutePath.EndsWith("/p2")) return """{"id":"p2"}""";
             Assert.DoesNotContain("page-secret",request.RequestUri!.Query);
             Assert.DoesNotContain("app-secret",request.RequestUri.Query);
             if(request.Method==HttpMethod.Post) { Assert.Contains("client_secret=app-secret",await request.Content!.ReadAsStringAsync()); return "{\"access_token\":\"user-secret\",\"expires_in\":3600}"; }

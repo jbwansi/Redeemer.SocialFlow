@@ -21,15 +21,16 @@ public sealed class PublicationOperation : IWorkspaceResource
     public string? ExternalId { get; private set; }
 
     public static PublicationOperation Claim(SocialPost post, Guid operationId, string provider,
-        string destination, TimeProvider? timeProvider = null, PostVisual? visual = null)
+        string destination, TimeProvider? timeProvider = null, PostVisual? visual = null, bool publishApproved = false)
     {
         ArgumentNullException.ThrowIfNull(post);
         var now = (timeProvider ?? TimeProvider.System).GetUtcNow();
         if (operationId == Guid.Empty) throw new DomainException("An operation ID is required.");
         if (string.IsNullOrWhiteSpace(provider) || string.IsNullOrWhiteSpace(destination) || string.IsNullOrWhiteSpace(post.Content))
             throw new DomainException("Provider, destination and publication content are required.");
-        if (post.IsDeleted || post.Status != SocialPostStatus.Scheduled || post.ScheduledAt is null || post.ScheduledAt > now)
-            throw new DomainException("Only a scheduled post that is due can be published.");
+        var eligible = post.Status == SocialPostStatus.Scheduled && post.ScheduledAt is not null && post.ScheduledAt <= now;
+        if (post.IsDeleted || !(eligible || (publishApproved && post.Status == SocialPostStatus.Approved)))
+            throw new DomainException("Publication requires an explicitly confirmed approved post or a scheduled post that is due.");
         if (post.SelectedVisualId is not null &&
             (visual is null || visual.Id != post.SelectedVisualId || visual.SocialPostId != post.Id ||
              !visual.IsReady || visual.IsDeleted || visual.ValidatedAt is null))

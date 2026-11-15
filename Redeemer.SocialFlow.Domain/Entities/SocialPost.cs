@@ -144,10 +144,10 @@ public class SocialPost : IWorkspaceResource
 		UpdatedAt = now;
 	}
 
-	public void MarkAsPublished(TimeProvider? timeProvider = null)
+	public void MarkAsPublished(TimeProvider? timeProvider = null, bool allowApproved = false)
 	{
 		EnsureNotDeleted();
-		if (Status != SocialPostStatus.Scheduled)
+		if (Status != SocialPostStatus.Scheduled && !(allowApproved && Status == SocialPostStatus.Approved))
 			throw new DomainException(
 				"La publication doit être programmée.");
 
@@ -169,10 +169,10 @@ public class SocialPost : IWorkspaceResource
         UpdatedAt = now;
     }
 
-	public void MarkAsFailed(TimeProvider? timeProvider = null)
+	public void MarkAsFailed(TimeProvider? timeProvider = null, bool allowApproved = false)
 	{
 		EnsureNotDeleted();
-		if (Status != SocialPostStatus.Scheduled)
+		if (Status != SocialPostStatus.Scheduled && !(allowApproved && Status == SocialPostStatus.Approved))
 			throw new DomainException(
 				"Seule une publication programmée peut échouer.");
 

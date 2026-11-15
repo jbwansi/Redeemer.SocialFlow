@@ -33,6 +33,18 @@ public sealed class PublicationOperationTests : IAsyncLifetime
         foreach (var suffix in new[] { "", "-wal", "-shm" }) File.Delete(_path + suffix);
         return Task.CompletedTask;
     }
+    [Fact]
+    public async Task ImmediateClaimRequiresWorkspaceProofAndCannotBeAutomatic()
+    {
+        var id = await Seed();
+        await Assert.ThrowsAsync<DomainException>(() => Store().TryClaimAsync(Request(id) with { PublishApproved = true }));
+        await Assert.ThrowsAsync<DomainException>(() => Store().TryClaimAsync(Request(id) with {
+            PublishApproved = true, AutomaticPlanRevision = Guid.NewGuid(),
+            WorkspaceProof = new("user", Guid.NewGuid(), Guid.NewGuid(), "Content", null, _clock.Now)
+        }));
+        await using var db = Db(); Assert.Empty(await db.PublicationOperations.ToListAsync());
+    }
+
     private async Task<Guid> Seed(DateTimeOffset? due = null)
     {
         var post = SocialPost.Create("Title", "Snapshot é\ncontent", SocialPlatform.LinkedIn, new Clock(_clock.Now.AddDays(-2)));

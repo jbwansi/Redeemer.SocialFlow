@@ -49,6 +49,8 @@ try {
     Assert ($web.EnvironmentVariables['SOCIALFLOW_VISUAL_GATEWAY_ENABLED'] -eq 'true') 'Missing gateway activation.'
     Assert ($api.EnvironmentVariables['ASPNETCORE_ENVIRONMENT'] -eq 'Development') 'Wrong API environment.'
     Assert ($api.EnvironmentVariables['Facebook__WorkerEnabled'] -eq 'false') 'Automatic Facebook publication must remain disabled.'
+    Assert ($api.EnvironmentVariables['SocialConnections__Publication__WorkerEnabled'] -eq 'false') 'Workspace worker must remain disabled.'
+    Assert ($api.EnvironmentVariables['SocialConnections__Providers__Facebook__PublicationEnabled'] -eq 'false') 'Workspace Facebook publication must remain disabled.'
     # Two harmless child processes prove actual environment inheritance without printing the secret.
     $fingerprints = @()
     foreach ($info in @($api, $web)) {
@@ -94,6 +96,9 @@ try {
         $global:LASTEXITCODE = 0
         if ($args -contains '--export-path') {
             [IO.File]::WriteAllText($args[[Array]::IndexOf($args, '--export-path') + 1], "-----BEGIN CERTIFICATE-----`nTEST`n-----END CERTIFICATE-----")
+            if ($args -contains '--no-password') {
+                [IO.File]::WriteAllText([IO.Path]::ChangeExtension($args[[Array]::IndexOf($args, '--export-path') + 1], '.key'), 'FAKE TEST KEY')
+            }
         }
     }
     $export = Export-LocalCertificate $testRoot
@@ -101,6 +106,10 @@ try {
     Assert ($global:certificateCalls.Count -eq 2) 'Expected check then export.'
     Assert ($global:certificateCalls[0] -contains '--check' -and $global:certificateCalls[0] -contains '--trust') 'Trust must be checked.'
     Assert ($global:certificateCalls[1] -contains 'PEM' -and $global:certificateCalls[1] -notcontains '--no-password' -and $global:certificateCalls[1] -notcontains '--password') 'Private key export is prohibited.'
+    $https = Export-LocalHttpsCertificate $testRoot
+    Assert (Test-Path -LiteralPath $https.Key) 'Vite key must be exported into private directory.'
+    Assert ((Split-Path $https.Key -Parent) -eq $testRoot) 'Key must stay in private directory.'
+    Assert ($global:certificateCalls[2] -contains '--check' -and $global:certificateCalls[2] -contains '--trust') 'Vite export must check existing trust first.'
     function global:dotnet { $global:LASTEXITCODE = 1 }
     Assert-Fails { Export-LocalCertificate $testRoot }
     Write-Host "Passed: $script:checks launcher assertions (Windows PowerShell $($PSVersionTable.PSVersion))."
