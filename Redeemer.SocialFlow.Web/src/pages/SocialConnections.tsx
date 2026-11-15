@@ -157,7 +157,7 @@ export function SocialConnections({
   }
   return (
     <section aria-label="Connexions sociales">
-      <p>Connectez les comptes de cet espace. La publication automatique reste désactivée.</p>
+      <p>Connectez les comptes de cet espace. Gérez l’envoi automatique dans les paramètres de publication.</p>
       {!canManage && (
         <p>Consultation uniquement : Owner ou Admin requis pour gérer les connexions.</p>
       )}
@@ -315,7 +315,7 @@ export function SocialConnections({
                   )}
                   <p>
                     {c.platform === 1 && c.publishingCapability ? <CapabilityDiagnostic evidence={c.publishingCapability} /> : c.publishingPermissionGranted
-                      ? 'Permission de publication accordée ; envoi automatique désactivé.'
+                      ? 'Permission de publication accordée.'
                       : 'Permission de publication non accordée.'}
                   </p>
                   {c.platform === 2 && c.accountType === 'Profile' && !c.publishingPermissionGranted && canManage && (

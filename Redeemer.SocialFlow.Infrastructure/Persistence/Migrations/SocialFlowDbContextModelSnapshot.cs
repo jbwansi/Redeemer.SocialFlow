@@ -708,6 +708,9 @@ namespace Redeemer.SocialFlow.Infrastructure.Persistence.Migrations
                         .HasMaxLength(450)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("PublicationSettingsJson")
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("Status")
                         .HasColumnType("INTEGER");
 

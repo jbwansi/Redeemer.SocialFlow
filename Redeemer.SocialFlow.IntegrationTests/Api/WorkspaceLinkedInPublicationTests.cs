@@ -3,6 +3,8 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
+using Redeemer.SocialFlow.Api.Publishing;
 using Redeemer.SocialFlow.Application.Accounts;
 using Redeemer.SocialFlow.Application.Publishing;
 using Redeemer.SocialFlow.Api.Development.LinkedIn;
@@ -42,6 +44,44 @@ public sealed partial class WorkspaceIsolationTests
         db.SocialConnections.Add(connection); await db.SaveChangesAsync(); return (post.Id, connection.Id);
     }
     private static string Manual(Guid id, string action) => $"/api/linkedin/posts/{id}/{action}";
+    [Fact]
+    public async Task WorkspaceLinkedIn_AutomaticRequiresOptInAndAuthorizationAndDoesNotSendTwice()
+    {
+        var data = await LinkedInData(a.Id);
+        var route = Manual(data.Post, "automatic");
+        var authorization = new { connectionId = data.Connection };
+        const string settings = "/api/workspace-publication-settings";
+        object Settings(bool enabled) => new {
+            timeZone = "Europe/Zurich", suggestedTimes = Array.Empty<string>(),
+            facebookAutomaticEnabled = false, linkedInAutomaticEnabled = enabled
+        };
+        async Task Tick()
+        {
+            await using var scope = factory.Services.CreateAsyncScope();
+            scope.ServiceProvider.GetRequiredService<WorkspaceAccessContext>().Bind(a.Id);
+            await scope.ServiceProvider.GetRequiredService<WorkspacePublicationService>().ProcessDueAsync(default);
+        }
+        factory.Services.GetRequiredService<IConfiguration>()["SocialConnections:Publication:WorkerEnabled"] = "true";
+        Assert.Equal(HttpStatusCode.Conflict, (await Send(alice, HttpMethod.Post, route, authorization)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Send(alice, HttpMethod.Put, settings, Settings(true))).StatusCode);
+        await Tick();
+        Assert.Equal(0, linkedInDispatch.Calls);
+        Assert.Equal(HttpStatusCode.NoContent, (await Send(alice, HttpMethod.Post, route, authorization)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Send(alice, HttpMethod.Put, settings, Settings(false))).StatusCode);
+        await Tick();
+        Assert.Equal(0, linkedInDispatch.Calls);
+        Assert.Equal(HttpStatusCode.OK, (await Send(alice, HttpMethod.Put, settings, Settings(true))).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await Send(alice, HttpMethod.Delete, route)).StatusCode);
+        await Tick();
+        Assert.Equal(0, linkedInDispatch.Calls);
+        Assert.Equal(HttpStatusCode.NoContent, (await Send(alice, HttpMethod.Post, route, authorization)).StatusCode);
+        await Tick();
+        await Tick();
+        Assert.Equal(1, linkedInDispatch.Calls);
+        await using var db = Db(a.Id);
+        Assert.Equal(PublicationOperationState.Confirmed, (await db.PublicationOperations.SingleAsync()).State);
+    }
+
     [Fact]
     public async Task WorkspaceLinkedIn_ConfirmationCannotCrossUserOrWorkspace_AndRoleIsRechecked()
     {

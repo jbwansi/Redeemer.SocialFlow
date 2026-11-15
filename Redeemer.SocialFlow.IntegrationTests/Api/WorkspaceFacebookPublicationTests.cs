@@ -116,6 +116,29 @@ public sealed partial class WorkspaceIsolationTests
         Assert.Equal(HttpStatusCode.NotFound, (await bob.GetAsync(FacebookRoute(data.Post, "publication"))).StatusCode);
     }
 
+    [Fact]
+    public async Task WorkspaceFacebook_SettingsPauseExistingAuthorizationsUntilResumed()
+    {
+        var handler = new FacebookDispatch(); var clock = new FacebookClock();
+        await using var host = FacebookHost(handler, clock); using var client = await FacebookClient(host);
+        var data = await FacebookData(host, clock, future: true);
+        var authorization = FacebookRoute(data.Post, "automatic");
+        const string settings = "/api/workspace-publication-settings";
+        object Settings(bool enabled) => new {
+            timeZone = "Europe/Zurich", suggestedTimes = Array.Empty<string>(),
+            facebookAutomaticEnabled = enabled, facebookConnectionId = data.Connection,
+        };
+        Assert.Equal(HttpStatusCode.NoContent, (await Send(client, HttpMethod.Post, authorization, new { connectionId = data.Connection })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Send(client, HttpMethod.Put, settings, Settings(false))).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Send(client, HttpMethod.Post, authorization, new { connectionId = data.Connection })).StatusCode);
+        clock.Now = clock.Now.AddMinutes(11);
+        await FacebookTick(host);
+        Assert.Equal(0, handler.Publications);
+        Assert.Equal(HttpStatusCode.OK, (await Send(client, HttpMethod.Put, settings, Settings(true))).StatusCode);
+        await FacebookTick(host);
+        Assert.Equal(1, handler.Publications);
+    }
+
     [Theory]
     [InlineData("permission")] [InlineData("expired")] [InlineData("type")] [InlineData("app")] [InlineData("identity")] [InlineData("scope")] [InlineData("graph")]
     public async Task WorkspaceFacebook_PreflightBlocksWithoutPublishing_AndCanResumeAfterExplicitReauthorization(string fault)

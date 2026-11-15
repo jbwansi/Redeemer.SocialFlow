@@ -74,6 +74,8 @@ public static class AccountSecurity
                 .RequireAuthenticatedUser().AddRequirements(new WorkspaceRequirement()).Build());
             options.AddPolicy("WorkspaceEdit", new AuthorizationPolicyBuilder(IdentityConstants.ApplicationScheme, LocalScheme)
                 .RequireAuthenticatedUser().AddRequirements(new WorkspaceRequirement(WorkspacePermission.Edit)).Build());
+            options.AddPolicy("WorkspaceManageSocial", new AuthorizationPolicyBuilder(IdentityConstants.ApplicationScheme)
+                .RequireAuthenticatedUser().AddRequirements(new WorkspaceRequirement(WorkspacePermission.ManageSocial)).Build());
             options.AddPolicy("WorkspaceApprove", new AuthorizationPolicyBuilder(IdentityConstants.ApplicationScheme, LocalScheme)
                 .RequireAuthenticatedUser().AddRequirements(new WorkspaceRequirement(WorkspacePermission.Approve)).Build());
             options.AddPolicy("AccountSession", new AuthorizationPolicyBuilder(IdentityConstants.ApplicationScheme)

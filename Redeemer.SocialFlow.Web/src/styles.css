@@ -202,6 +202,26 @@ small {
   align-items: center;
   gap: 10px;
 }
+.sidebar nav a.mobile-publication-settings {
+  display: none;
+}
+.workspace-profile-link {
+  color: inherit;
+  text-decoration: none;
+}
+.workspace-profile-link > svg {
+  flex-shrink: 0;
+  margin-left: auto;
+  color: var(--muted);
+}
+.workspace-profile-link:hover small,
+.workspace-profile-link[aria-current="page"] small {
+  text-decoration: underline;
+}
+.workspace-profile-link:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
 .workspace-profile > span {
   display: grid;
   place-items: center;
@@ -1447,6 +1467,9 @@ tbody tr:hover {
     padding: 10px 8px;
     border-radius: 6px 6px 0 0;
     gap: 7px;
+  }
+  .sidebar nav a.mobile-publication-settings {
+    display: flex;
   }
   .sidebar nav a svg {
     width: 16px;

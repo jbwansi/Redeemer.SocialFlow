@@ -7,7 +7,7 @@ import { socialConnectionsApi } from '../api/socialConnections'
 import { workspaceLinkedInApi } from '../api/linkedin'
 import { ApiError, postsApi } from '../api/posts'
 
-const api = vi.hoisted(() => ({ publication: vi.fn(), preview: vi.fn(), publish: vi.fn() }))
+const api = vi.hoisted(() => ({ publication: vi.fn(), preview: vi.fn(), publish: vi.fn(), authorize: vi.fn() }))
 vi.mock('../api/linkedin', async () => ({ ...await vi.importActual('../api/linkedin'), workspaceLinkedInApi: vi.fn(() => api) }))
 vi.mock('../api/socialConnections', () => ({ socialConnectionsApi: { list: vi.fn() } }))
 beforeEach(() => {
@@ -36,6 +36,18 @@ it('requires explicit eligible profile selection and confirmation before sending
   await userEvent.click(screen.getByRole('button', { name: 'Confirmer la publication' }))
   await waitFor(() => expect(api.publish).toHaveBeenCalledTimes(1))
   expect(await screen.findByText('Publication confirmée')).toBeInTheDocument()
+})
+it('authorizes a scheduled LinkedIn post without calling manual publish', async () => {
+  api.publication.mockResolvedValue({ operation: null, canPublish: false, blockReason: 'automatic_not_authorized' })
+  api.authorize.mockResolvedValue(undefined)
+  show()
+  const button = await screen.findByRole('button', { name: 'Autoriser la publication LinkedIn à échéance' })
+  expect(button).toBeDisabled()
+  await screen.findByRole('option', { name: /Allowed profile/ })
+  await userEvent.selectOptions(screen.getByLabelText(/Profil LinkedIn destinataire/), 'profile')
+  await userEvent.click(button)
+  expect(api.authorize).toHaveBeenCalledTimes(1)
+  expect(api.publish).not.toHaveBeenCalled()
 })
 it('offers immediate manual confirmation on an approved post with an explicit profile', async () => {
   api.publication.mockResolvedValue({ operation: null, canPublish: true })

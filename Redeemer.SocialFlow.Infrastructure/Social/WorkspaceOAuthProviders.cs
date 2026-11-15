@@ -93,7 +93,7 @@ public sealed class LinkedInWorkspaceOAuthProvider(HttpClient http, IConfigurati
 		!Settings.GetValue<bool>("PermissionsApproved") || !Scopes.Contains("openid") || !Scopes.Contains("profile") ? "Activez les permissions LinkedIn openid et profile pour identifier le compte." :
 		!Available ? "Vérifiez l’origine HTTPS et la version API des organisations LinkedIn côté serveur." :
 		"Identification du profil disponible. " + (Scopes.Contains("w_member_social") ? "Publication du profil soumise au consentement LinkedIn. " : "Permission de publication du profil non demandée. ") +
-		(!Settings.GetValue<bool>("OrganizationsEnabled") ? "Pages d’organisation non activées. " : "Pages d’organisation selon les droits accordés. ") + "Publication automatique désactivée.";
+		(!Settings.GetValue<bool>("OrganizationsEnabled") ? "Pages d’organisation non activées. " : "Pages d’organisation selon les droits accordés. ") + "L’envoi automatique dépend des paramètres de l’espace et de l’autorisation de chaque post.";
 	public override SocialPlatform Platform => SocialPlatform.LinkedIn;
 	public override bool Available => base.Available && !string.IsNullOrWhiteSpace(ClientId) && !string.IsNullOrWhiteSpace(ClientSecret) && Scopes.Contains("openid") && Scopes.Contains("profile") &&
 		(!Settings.GetValue<bool>("OrganizationsEnabled") || Regex.IsMatch(Settings["ApiVersion"] ?? "", "^[0-9]{6}$"));

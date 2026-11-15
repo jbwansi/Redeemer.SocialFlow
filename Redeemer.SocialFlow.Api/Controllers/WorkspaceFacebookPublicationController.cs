@@ -23,5 +23,5 @@ public sealed class WorkspaceFacebookPublicationController(WorkspacePublicationS
     { await publication.AuthorizeAutomatic(SocialPlatform.Facebook, actor.UserId, id, request.ConnectionId, ct); return NoContent(); }
     [HttpDelete("automatic")]
     public async Task<IActionResult> CancelAutomatic(Guid id, CancellationToken ct)
-    { await publication.CancelAutomatic(id, ct); return NoContent(); }
+    { await publication.CancelAutomatic(SocialPlatform.Facebook, id, ct); return NoContent(); }
 }

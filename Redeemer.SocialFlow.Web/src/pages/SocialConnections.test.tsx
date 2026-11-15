@@ -89,11 +89,11 @@ it('refreshes confirmed LinkedIn permissions only after selecting the returned p
   })
   render(<SocialConnections workspaceId="one" canManage />)
   expect(await screen.findByText(/Reconnectez ce profil/)).toBeInTheDocument()
-  expect(screen.queryByText('Permission de publication accordée ; envoi automatique désactivé.')).not.toBeInTheDocument()
+  expect(screen.queryByText('Permission de publication accordée.')).not.toBeInTheDocument()
   await userEvent.click(screen.getByRole('checkbox'))
   await userEvent.click(screen.getByRole('button', { name: 'Ajouter les comptes sélectionnés' }))
   expect(api.select).toHaveBeenCalledWith('one', 'oauth-session', [profile.externalAccountId])
-  expect(await screen.findByText('Permission de publication accordée ; envoi automatique désactivé.')).toBeInTheDocument()
+  expect(await screen.findByText('Permission de publication accordée.')).toBeInTheDocument()
 })
 beforeEach(() => {
   vi.resetAllMocks()

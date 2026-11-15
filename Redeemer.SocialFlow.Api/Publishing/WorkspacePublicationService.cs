@@ -50,18 +50,16 @@ public sealed partial class WorkspacePublicationService(SocialFlowDbContext db,
             post.ScheduledAt is null ? "schedule_missing" : post.ScheduledAt > clock.GetUtcNow() ? "scheduled_not_due" : null;
         var manualReason = operation is not null ? "operation_exists" : !enabled ? "publication_disabled" :
             !allowed ? "publishing_permission_unverified" : editorialReason;
-        if (platform == SocialPlatform.Facebook)
         {
             var plan = await db.LinkedInAutomations.AsNoTracking().SingleOrDefaultAsync(x => x.SocialPostId == id, ct);
-            var worker = configuration.GetValue<bool>("SocialConnections:Publication:WorkerEnabled");
+            var workspaceEnabled = AutomaticEnabled(await ReadPublicationSettings(ct), platform);
+            var worker = workspaceEnabled && configuration.GetValue<bool>("SocialConnections:Publication:WorkerEnabled");
             var authorized = plan?.State == LinkedInAutomationState.Authorized;
             var reason = !enabled ? "publication_disabled" : !allowed ? "publishing_permission_unverified" :
-                post.Status != SocialPostStatus.Scheduled ? null : plan?.State == LinkedInAutomationState.Blocked ? plan.BlockReason : !authorized ? "automatic_not_authorized" : !worker ? "worker_disabled" : null;
+                post.Status != SocialPostStatus.Scheduled ? null : plan?.State == LinkedInAutomationState.Blocked ? plan.BlockReason : !workspaceEnabled ? "workspace_automatic_disabled" : !authorized ? "automatic_not_authorized" : !worker ? "worker_disabled" : null;
             return new(operation is null ? null : PublicationOperationDto.FromEntity(operation), manualReason is null,
                 operation is null ? reason : null, authorized, worker, manualReason);
         }
-        return new(operation is null ? null : PublicationOperationDto.FromEntity(operation), manualReason is null,
-            ManualBlockReason: manualReason);
     }
     public async Task<LinkedInPreview> Preview(SocialPlatform platform, string userId, Guid id, WorkspaceLinkedInPreviewRequest request, CancellationToken ct)
     {

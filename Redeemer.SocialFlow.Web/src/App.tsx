@@ -7,6 +7,7 @@ import {
   ArrowUpRight,
   RefreshCw,
   Trash2,
+  Settings,
 } from 'lucide-react'
 import { postsApi, type Post, type Status, type KnowledgePassage } from './api/posts'
 import { VisualIdentities } from './pages/VisualIdentities'
@@ -20,10 +21,13 @@ import { PostDetails } from './components/PostDetails'
 import { GenerateDraft } from './components/GenerateDraft'
 import { FacebookConnection } from './components/FacebookConnection'
 import { LinkedInConnection } from './components/LinkedInConnection'
+import { PublicationSettings } from './pages/PublicationSettings'
+import { publicationSettingsApi, type PublicationSettings as PublicationPreferences } from './api/publicationSettings'
 import { SocialConnections } from './pages/SocialConnections'
 
-type Page = 'dashboard' | 'calendar' | 'posts' | 'trash' | 'identities' | 'social-connections'
+type Page = 'dashboard' | 'calendar' | 'posts' | 'trash' | 'identities' | 'social-connections' | 'publication-settings'
 const pages = {
+  'publication-settings': { title: 'Paramètres de publication', description: 'Destinations et planification de votre espace.', icon: Settings },
   'social-connections': {
     title: 'Réseaux sociaux',
     description: 'Les comptes et destinations de votre espace.',
@@ -57,7 +61,7 @@ const pages = {
 }
 function currentPage(): Page {
   const hash = window.location.hash.slice(1).split('?')[0]
-  return hash === 'social-connections' ||
+  return hash === 'publication-settings' || hash === 'social-connections' ||
     hash === 'identities' ||
     hash === 'calendar' ||
     hash === 'posts' ||
@@ -80,6 +84,17 @@ export default function App({
   workspaceId?: string
   canManageSocial?: boolean
 } = {}) {
+  const [publicationSettings, setPublicationSettings] = useState<PublicationPreferences>()
+  useEffect(() => {
+    setPublicationSettings(undefined)
+    if (!workspaceId || localAdministration) return
+    const controller = new AbortController()
+    publicationSettingsApi.get(controller.signal).then(settings => {
+      if (!controller.signal.aborted) setPublicationSettings(settings)
+    }).catch(() => { /* Defaults are optional; the manual publishing flow remains available. */ })
+    return () => controller.abort()
+  }, [workspaceId, localAdministration])
+  const canOpenSettings = !localAdministration && !!workspaceId && canManageSocial
   const [page, setPage] = useState<Page>(currentPage)
   const [posts, setPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
@@ -159,7 +174,7 @@ export default function App({
         <nav aria-label="Main navigation">
           {Object.entries(pages)
             .filter(([id]) =>
-              id === 'social-connections'
+              id === 'publication-settings' ? canOpenSettings : id === 'social-connections'
                 ? !localAdministration
                 : localAdministration || id !== 'identities',
             )
@@ -167,6 +182,7 @@ export default function App({
               <a
                 key={id}
                 href={`#${id}`}
+                className={id === 'publication-settings' ? 'mobile-publication-settings' : undefined}
                 aria-current={page === id ? 'page' : undefined}
                 onClick={(event) => {
                   event.preventDefault()
@@ -194,13 +210,34 @@ export default function App({
             SocialFlow <ArrowUpRight size={14} />
           </span>
         </div>
-        <div className="workspace-profile">
-          <span>RH</span>
-          <div>
-            <strong>{workspaceName}</strong>
-            <small>Editorial workspace</small>
+        {canOpenSettings ? (
+          <a
+            className="workspace-profile workspace-profile-link"
+            href="#publication-settings"
+            aria-label={`Paramètres de publication – ${workspaceName}`}
+            aria-current={page === 'publication-settings' ? 'page' : undefined}
+            onClick={(event) => {
+              if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+              event.preventDefault()
+              navigate('publication-settings')
+            }}
+          >
+            <span aria-hidden="true">RH</span>
+            <div>
+              <strong>{workspaceName}</strong>
+              <small>Paramètres de publication</small>
+            </div>
+            <Settings size={15} aria-hidden="true" />
+          </a>
+        ) : (
+          <div className="workspace-profile">
+            <span aria-hidden="true">RH</span>
+            <div>
+              <strong>{workspaceName}</strong>
+              <small>Editorial workspace</small>
+            </div>
           </div>
-        </div>
+        )}
       </aside>
       <div className="workspace">
         {workspaceHeader}
@@ -235,7 +272,7 @@ export default function App({
               >
                 <RefreshCw size={18} />
               </button>
-              {canEdit && page !== 'trash' && page !== 'social-connections' && (
+              {canEdit && page !== 'trash' && page !== 'social-connections' && page !== 'publication-settings' && (
                 <button className="button primary" onClick={() => setEditor({})}>
                   <Plus size={18} />
                   Create post
@@ -254,7 +291,11 @@ export default function App({
               {notice}
             </div>
           )}
-          {page === 'social-connections' ? (
+          {page === 'publication-settings' ? (
+            workspaceId && !localAdministration && canManageSocial
+              ? <PublicationSettings key={workspaceId} workspaceId={workspaceId} settings={publicationSettings} changed={setPublicationSettings} />
+              : <p role="alert">Les paramètres sont réservés aux administrateurs de l’espace.</p>
+          ) : page === 'social-connections' ? (
             workspaceId && !localAdministration ? (
               <SocialConnections
                 key={workspaceId}
@@ -334,6 +375,7 @@ export default function App({
       )}{' '}
       {!editor && selected && (
         <PostDetails
+          publicationSettings={publicationSettings}
           workspaceId={workspaceId}
           canEdit={canEdit}
           localAdministration={localAdministration}

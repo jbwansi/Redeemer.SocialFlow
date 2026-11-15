@@ -8,6 +8,8 @@ import { Calendar } from './Calendar'
 import { Posts } from './Posts'
 import { dateBoundary, dayKey } from '../lib/dates'
 import App from '../App'
+import { publicationSettingsApi } from '../api/publicationSettings'
+import { socialConnectionsApi } from '../api/socialConnections'
 
 describe('workspace screens', () => {
   it('places the workspace selector in the content column alongside the sidebar', async () => {
@@ -29,11 +31,27 @@ describe('workspace screens', () => {
     expect(container.querySelector('.sidebar')).not.toContainElement(screen.getByRole('combobox'))
     expect(container.querySelector('.workspace > header + .topbar')).toBeInTheDocument()
   })
+  it('opens publication settings from the workspace card for a manager', async () => {
+    window.history.replaceState(null, '', '#dashboard')
+    vi.spyOn(postsApi, 'list').mockResolvedValue([])
+    vi.spyOn(publicationSettingsApi, 'get').mockResolvedValue({
+      facebookConnectionId: null, linkedInConnectionId: null, timeZone: 'Europe/Zurich',
+      suggestedTimes: [], facebookAutomaticEnabled: true, linkedInAutomaticEnabled: false,
+    })
+    vi.spyOn(socialConnectionsApi, 'list').mockResolvedValue([])
+    render(<App localAdministration={false} workspaceId="studio" workspaceName="Studio" canManageSocial />)
+    const link = screen.getByRole('link', { name: 'Paramètres de publication – Studio' })
+    await userEvent.click(link)
+    expect(await screen.findByRole('heading', { name: 'Paramètres de publication' })).toBeInTheDocument()
+    expect(link).toHaveAttribute('aria-current', 'page')
+  })
+
   it('shows no creation actions to a Viewer in an empty workspace', async () => {
     location.hash = 'dashboard'
     vi.spyOn(postsApi, 'list').mockResolvedValue([])
     render(<App workspaceName="Viewer workspace" localAdministration={false} canEdit={false} />)
     await screen.findByText('Your story starts here')
+    expect(screen.queryByRole('link', { name: /Paramètres de publication/ })).not.toBeInTheDocument()
     expect(
       screen.queryByRole('button', { name: /Create|Start a new post/ }),
     ).not.toBeInTheDocument()

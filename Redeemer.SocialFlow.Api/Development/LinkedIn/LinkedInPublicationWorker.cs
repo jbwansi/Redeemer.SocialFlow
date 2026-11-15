@@ -6,11 +6,12 @@ using Redeemer.SocialFlow.Api.Publishing;
 namespace Redeemer.SocialFlow.Api.Development.LinkedIn;
 
 public sealed class LinkedInPublicationWorker(IServiceScopeFactory scopes, TimeProvider clock,
-    ILogger<LinkedInPublicationWorker> logger) : BackgroundService
+    ILogger<LinkedInPublicationWorker> logger, IConfiguration configuration) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(30), clock);
+        var interval = Math.Clamp(configuration.GetValue("SocialConnections:Publication:PollIntervalSeconds", 30), 5, 300);
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(interval), clock);
         try
         {
             // No immediate dispatch at host startup. Only explicitly enabled hosts register this worker.

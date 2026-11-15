@@ -19,4 +19,10 @@ public sealed class WorkspaceLinkedInPublicationController(WorkspacePublicationS
     public Task<LinkedInPreview> Preview(Guid id, WorkspaceLinkedInPreviewRequest request, CancellationToken ct) => publication.Preview(SocialPlatform.LinkedIn, actor.UserId, id, request, ct);
     [HttpPost("publish")]
     public Task<PublicationOperationDto> Publish(Guid id, LinkedInPublishRequest request, CancellationToken ct) => publication.Publish(SocialPlatform.LinkedIn, actor.UserId, id, request, ct);
+    [HttpPost("automatic")]
+    public async Task<IActionResult> Automatic(Guid id, WorkspaceLinkedInPreviewRequest request, CancellationToken ct)
+    { await publication.AuthorizeAutomatic(SocialPlatform.LinkedIn, actor.UserId, id, request.ConnectionId, ct); return NoContent(); }
+    [HttpDelete("automatic")]
+    public async Task<IActionResult> CancelAutomatic(Guid id, CancellationToken ct)
+    { await publication.CancelAutomatic(SocialPlatform.LinkedIn, id, ct); return NoContent(); }
 }

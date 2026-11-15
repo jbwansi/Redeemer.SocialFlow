@@ -8,8 +8,24 @@ namespace Redeemer.SocialFlow.Api.Publishing;
 
 public sealed partial class WorkspacePublicationService
 {
+    private async Task<WorkspacePublicationSettings> ReadPublicationSettings(CancellationToken ct)
+    {
+        var id = db.ActiveWorkspaceId;
+        var settings = await db.Workspaces.AsNoTracking().Where(x => x.Id == id)
+            .Select(x => x.PublicationSettingsJson).SingleOrDefaultAsync(ct);
+        return WorkspacePublicationSettings.Read(settings);
+    }
+
+    private static bool AutomaticEnabled(WorkspacePublicationSettings settings, SocialPlatform platform) => platform switch
+    {
+        SocialPlatform.Facebook => settings.FacebookAutomaticEnabled != false,
+        SocialPlatform.LinkedIn => settings.LinkedInAutomaticEnabled,
+        _ => false
+    };
+
     public async Task AuthorizeAutomatic(SocialPlatform platform, string userId, Guid id, Guid connectionId, CancellationToken ct)
     {
+        if (!AutomaticEnabled(await ReadPublicationSettings(ct), platform)) throw new SocialConnectionException(409, "La publication automatique est désactivée dans cet espace.");
         var post = await Post(platform, id, ct);
         if (post.Status != SocialPostStatus.Scheduled || post.ScheduledAt is null ||
             await db.PublicationOperations.AnyAsync(x => x.SocialPostId == id, ct)) throw Invalid();
@@ -30,9 +46,9 @@ public sealed partial class WorkspacePublicationService
         await db.SaveChangesAsync(ct); await transaction.CommitAsync(ct);
     }
 
-    public async Task CancelAutomatic(Guid id, CancellationToken ct)
+    public async Task CancelAutomatic(SocialPlatform platform, Guid id, CancellationToken ct)
     {
-        await Post(SocialPlatform.Facebook, id, ct);
+        await Post(platform, id, ct);
         var plan = await db.LinkedInAutomations.SingleOrDefaultAsync(x => x.SocialPostId == id, ct);
         if (plan is null) return;
         plan.State = LinkedInAutomationState.Blocked; plan.BlockReason = "automatic_cancelled";
@@ -41,27 +57,42 @@ public sealed partial class WorkspacePublicationService
 
     public async Task ProcessDueAsync(CancellationToken ct)
     {
-        if (!configuration.GetValue<bool>("SocialConnections:Publication:WorkerEnabled") ||
-            !configuration.GetValue<bool>("SocialConnections:Providers:Facebook:PublicationEnabled")) return;
-        var plans = await db.LinkedInAutomations.AsNoTracking().Where(x => x.State == LinkedInAutomationState.Authorized &&
-            db.SocialPosts.Any(p => p.Id == x.SocialPostId && p.Platform == SocialPlatform.Facebook) &&
-            !db.PublicationOperations.Any(o => o.SocialPostId == x.SocialPostId)).ToListAsync(ct);
-        foreach (var plan in plans.Where(x => x.ScheduledAtUtc <= clock.GetUtcNow()).OrderBy(x => x.ScheduledAtUtc).ThenBy(x => x.SocialPostId).Take(20))
+        if (!configuration.GetValue<bool>("SocialConnections:Publication:WorkerEnabled")) return;
+        var settings = await ReadPublicationSettings(ct);
+        var facebook = AutomaticEnabled(settings, SocialPlatform.Facebook) &&
+            configuration.GetValue<bool>("SocialConnections:Providers:Facebook:PublicationEnabled");
+        var linkedIn = AutomaticEnabled(settings, SocialPlatform.LinkedIn);
+        if (!facebook && !linkedIn) return;
+        var plans = await (from plan in db.LinkedInAutomations.AsNoTracking()
+            join post in db.SocialPosts.AsNoTracking() on plan.SocialPostId equals post.Id
+            where plan.State == LinkedInAutomationState.Authorized &&
+                (facebook && post.Platform == SocialPlatform.Facebook || linkedIn && post.Platform == SocialPlatform.LinkedIn) &&
+                !db.PublicationOperations.Any(o => o.SocialPostId == plan.SocialPostId)
+            select new { Plan = plan, post.Platform }).ToListAsync(ct);
+        foreach (var item in plans.Where(x => x.Plan.ScheduledAtUtc <= clock.GetUtcNow())
+            .OrderBy(x => x.Plan.ScheduledAtUtc).ThenBy(x => x.Plan.SocialPostId).Take(20))
         {
             ct.ThrowIfCancellationRequested();
+            var (plan, platform) = (item.Plan, item.Platform);
+            if (!AutomaticEnabled(await ReadPublicationSettings(ct), platform)) continue;
             try
             {
-                var post = await Post(SocialPlatform.Facebook, plan.SocialPostId, ct);
+                var post = await Post(platform, plan.SocialPostId, ct);
                 if (post.Status != SocialPostStatus.Scheduled || post.ScheduledAt != plan.ScheduledAtUtc || post.UpdatedAt != plan.PostUpdatedAtUtc) throw Invalid();
-                var connection = await Connection(SocialPlatform.Facebook, plan.SocialConnectionId, ct);
-                var credential = await Credential(SocialPlatform.Facebook, plan.AuthorizedByUserId, connection.Id, connection.Revision, ct);
+                var connection = await Connection(platform, plan.SocialConnectionId, ct);
+                var credential = await Credential(platform, plan.AuthorizedByUserId, connection.Id, connection.Revision, ct);
                 // A failed preflight has no publication side effect and creates no durable dispatch claim.
-                var provider = services.GetServices<IWorkspaceOAuthProvider>().OfType<FacebookWorkspaceOAuthProvider>().Single();
-                await provider.PublicationCredentialAsync(connection.ExternalAccountId, credential, ct);
+                if (platform == SocialPlatform.Facebook)
+                {
+                    var provider = services.GetServices<IWorkspaceOAuthProvider>().OfType<FacebookWorkspaceOAuthProvider>().Single();
+                    await provider.PublicationCredentialAsync(connection.ExternalAccountId, credential, ct);
+                }
+                if (!AutomaticEnabled(await ReadPublicationSettings(ct), platform)) continue;
                 var proof = new Application.Publishing.WorkspacePublicationProof(plan.AuthorizedByUserId, connection.Id,
                     connection.Revision, post.Content, post.SelectedVisualId, post.UpdatedAt);
-                await Execute(SocialPlatform.Facebook, new(connection.WorkspaceId, post.Id, Guid.NewGuid(), proof,
-                    connection.ExternalAccountId, clock.GetUtcNow().AddMinutes(5)), plan.Revision, ct);
+                var destination = platform == SocialPlatform.Facebook ? connection.ExternalAccountId : "urn:li:person:" + connection.ExternalAccountId;
+                await Execute(platform, new(connection.WorkspaceId, post.Id, Guid.NewGuid(), proof,
+                    destination, clock.GetUtcNow().AddMinutes(5)), plan.Revision, ct);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
             catch (Exception)

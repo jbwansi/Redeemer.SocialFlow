@@ -154,6 +154,36 @@ public sealed partial class WorkspaceIsolationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task PublicationSettings_AreIsolated_AndRequireAnAdministratorToChange()
+    {
+        const string path = "/api/workspace-publication-settings";
+        var settings = new {
+            timeZone = "Europe/Zurich", suggestedTimes = new[] { "17:00", "09:30", "17:00" },
+            facebookAutomaticEnabled = false,
+        };
+        Assert.Equal(HttpStatusCode.BadRequest, (await alice.PutAsJsonAsync(path, settings)).StatusCode);
+        var update = await Send(alice, HttpMethod.Put, path, settings);
+        Assert.Equal(HttpStatusCode.OK, update.StatusCode);
+        var saved = await alice.GetFromJsonAsync<JsonElement>(path);
+        Assert.Equal("Europe/Zurich", saved.GetProperty("timeZone").GetString());
+        Assert.Equal(new[] { "09:30", "17:00" }, saved.GetProperty("suggestedTimes").EnumerateArray().Select(x => x.GetString()));
+        Assert.False(saved.GetProperty("facebookAutomaticEnabled").GetBoolean());
+        var other = await bob.GetFromJsonAsync<JsonElement>(path);
+        Assert.Empty(other.GetProperty("suggestedTimes").EnumerateArray());
+        Assert.True(other.GetProperty("facebookAutomaticEnabled").GetBoolean());
+        Assert.Equal(HttpStatusCode.BadRequest, (await Send(alice, HttpMethod.Put, path, new {
+            settings.timeZone, settings.suggestedTimes, settings.facebookAutomaticEnabled, facebookConnectionId = Guid.NewGuid(),
+        })).StatusCode);
+        await using var db = Db(a.Id);
+        db.WorkspaceMemberships.Add(WorkspaceMembership.Join(a.Id, bobId, WorkspaceRole.Editor));
+        await db.SaveChangesAsync();
+        bob.DefaultRequestHeaders.Remove("X-Workspace-Id");
+        bob.DefaultRequestHeaders.Add("X-Workspace-Id", a.Id.ToString());
+        Assert.Equal(HttpStatusCode.OK, (await bob.GetAsync(path)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Send(bob, HttpMethod.Put, path, settings)).StatusCode);
+    }
+
+    [Fact]
     public async Task Lists_DirectAccess_Mutations_AndTrashAreIsolated()
     {
         var own = await Create(alice, "Alice private"); var foreign = await Create(bob, "Bob private");

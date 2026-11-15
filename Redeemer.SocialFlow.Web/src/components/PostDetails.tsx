@@ -1,6 +1,8 @@
 import { PostVisuals } from './PostVisuals'
 import { useRef, useState } from 'react'
 import { postsApi, type Post, type WorkflowAction, type KnowledgePassage } from '../api/posts'
+import { publicationInstant } from '../lib/publicationTime'
+import type { PublicationSettings } from '../api/publicationSettings'
 import { dateLabel, timeLabel, timezone } from '../lib/dates'
 import { ErrorNotice, Modal, PlatformLabel, StatusBadge } from './shared'
 import { AiReviewNotice } from './GenerateDraft'
@@ -25,6 +27,7 @@ export function PostDetails({
   localAdministration = true,
   canEdit = true,
   workspaceId,
+  publicationSettings,
 }: {
   post: Post
   close: () => void
@@ -36,6 +39,7 @@ export function PostDetails({
   localAdministration?: boolean
   canEdit?: boolean
   workspaceId?: string
+  publicationSettings?: PublicationSettings
 }) {
   const [busy, setBusy] = useState(false)
   const deleting = useRef(false)
@@ -63,7 +67,9 @@ export function PostDetails({
         await postsApi.transition(
           post.id,
           action,
-          action === 'schedule' ? new Date(date).toISOString() : undefined,
+          action === 'schedule'
+            ? publicationSettings ? publicationInstant(date, publicationSettings.timeZone) : new Date(date).toISOString()
+            : undefined,
         ),
       )
     } catch (err) {
@@ -138,14 +144,20 @@ export function PostDetails({
               onChange={(e) => setDate(e.target.value)}
               disabled={busy}
             />
-            <small>Your timezone: {timezone}.</small>
+            <small>Fuseau horaire : {publicationSettings?.timeZone ?? timezone}.</small>
+            {!!publicationSettings?.suggestedTimes.length && (
+              <span> Créneaux proposés : {publicationSettings.suggestedTimes.map(time => (
+                <button type="button" className="button" key={time} disabled={busy || !date}
+                  onClick={() => setDate(date.slice(0, 10) + 'T' + time)}>{time}</button>
+              ))}</span>
+            )}
           </label>
         )}
         {localAdministration && import.meta.env.DEV && [1, 2].includes(post.platform) && (
           <PlatformPublication post={post} busy={busy} setBusy={setBusy} changed={changed} />
         )}
         {!localAdministration && canEdit && workspaceId && [1, 2].includes(post.platform) && [3, 4, 5, 7].includes(post.status) && (
-          <PlatformPublication key={workspaceId + post.id} workspaceId={workspaceId} post={post} busy={busy} setBusy={setBusy} changed={changed} />
+          <PlatformPublication key={workspaceId + post.id} workspaceId={workspaceId} preferredConnectionId={post.platform === 1 ? publicationSettings?.facebookConnectionId : publicationSettings?.linkedInConnectionId} post={post} busy={busy} setBusy={setBusy} changed={changed} />
         )}
         {!localAdministration && [1, 2].includes(post.platform) && (!canEdit || !workspaceId) && (
           <section className="linkedin-panel" aria-label={'Publication ' + (post.platform === 1 ? 'Facebook' : 'LinkedIn')}>

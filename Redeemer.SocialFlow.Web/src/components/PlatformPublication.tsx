@@ -17,13 +17,16 @@ export function PlatformPublication({
   setBusy,
   changed,
   workspaceId,
+  preferredConnectionId,
 }: {
   post: Post
   busy: boolean
   setBusy: (value: boolean) => void
   changed: (post: Post) => void
   workspaceId?: string
+  preferredConnectionId?: string | null
 }) {
+  const selectionEdited = useRef(false)
   const [connectionId, setConnectionId] = useState('')
   const [connections, setConnections] = useState<Connection[]>([])
   const [blockedConnections, setBlockedConnections] = useState<Connection[]>([])
@@ -60,6 +63,10 @@ export function PlatformPublication({
       .finally(() => { if (!controller.signal.aborted) setConnectionsLoading(false) })
     return () => controller.abort()
   }, [workspaceId, revision, post.platform])
+  useEffect(() => {
+    if (!selectionEdited.current && preferredConnectionId && connections.some(c => c.id === preferredConnectionId))
+      setConnectionId(preferredConnectionId)
+  }, [connections, preferredConnectionId])
   useEffect(() => {
     const state = view?.operation?.state
     if (
@@ -132,9 +139,9 @@ export function PlatformPublication({
     if (sending.current || busy) return
     sending.current = true; setBusy(true); setError(undefined)
     try {
-      const facebook = workspaceFacebookApi(connectionId)
-      if (cancel) await facebook.cancelAutomatic(post.id)
-      else await facebook.authorize(post.id)
+      const automaticApi = post.platform === 1 ? workspaceFacebookApi(connectionId) : workspaceLinkedInApi(connectionId)
+      if (cancel) await automaticApi.cancelAutomatic(post.id)
+      else await automaticApi.authorize(post.id)
       setPreview(undefined); setRevision(value => value + 1)
     } catch (err) { setError(err) }
     finally { sending.current = false; setBusy(false) }
@@ -184,7 +191,8 @@ export function PlatformPublication({
     scheduled_not_due: `Publication programmée : l’envoi manuel sera disponible à l’échéance${post.scheduledAt ? ' du ' + new Date(post.scheduledAt).toLocaleString() : ''}.`,
     operation_exists: 'Une opération existe déjà pour ce post. Aucun nouvel envoi autorisé.',
     publishing_permission_unverified: 'Publication bloquée : permissions de publication non vérifiées ou connexion expirée. Reconnectez la Page et vérifiez ses autorisations.',
-    automatic_not_authorized: 'Publication planifiée non autorisée : sélectionnez une Page puis autorisez explicitement son envoi à échéance.',
+    automatic_not_authorized: 'Publication planifiée non autorisée : sélectionnez une destination puis autorisez explicitement son envoi à échéance.',
+    workspace_automatic_disabled: 'Envoi automatique désactivé dans les paramètres de cet espace.',
     worker_disabled: 'Traitement automatique désactivé côté serveur. L’envoi manuel reste possible à échéance.',
     authorization_or_validation_failed: 'Envoi automatique bloqué avant publication : autorisation, jeton ou contenu à vérifier. Après correction, autorisez de nouveau le plan.',
     automatic_cancelled: 'Autorisation de publication automatique retirée.',
@@ -197,7 +205,7 @@ export function PlatformPublication({
       {unavailableReason && <p role="status">{unavailableReason}</p>}
       {connectionsError != null && <ErrorNotice error={connectionsError} />}
       {workspaceId && !view?.operation && <label>{destinationName} destinataire
-        <select value={connectionId} disabled={busy || !!preview} onChange={e => { setConnectionId(e.target.value); setPreview(undefined) }}>
+        <select value={connectionId} disabled={busy || !!preview} onChange={e => { selectionEdited.current = true; setConnectionId(e.target.value); setPreview(undefined) }}>
           <option value="">{post.platform === 1 ? 'Choisir explicitement une Page' : 'Choisir explicitement un profil'}</option>
           {connections.map(c => <option key={c.id} value={c.id}>{c.displayName} ({c.externalAccountId})</option>)}
         </select>
@@ -210,12 +218,12 @@ export function PlatformPublication({
           : c.publishingCapability?.status === 0 ? 'Capacités de publication non vérifiées (Unverified).'
           : 'Connexion non autorisée à publier, expirée ou déconnectée.'}
       </p>)}
-      {workspaceId && post.platform === 1 && post.status === 4 && !view?.operation && <div>
+      {workspaceId && [1, 2].includes(post.platform) && post.status === 4 && !view?.operation && <div>
         {view?.automaticAuthorized ? <>
           <p>Envoi automatique autorisé pour le contenu, la destination et l’échéance enregistrés.</p>
           <button className="button" disabled={busy} onClick={() => automatic(true)}>Retirer l’autorisation automatique</button>
-        </> : <button className="button" disabled={busy || loading || connectionsLoading || !!connectionsError || !connections.some(c => c.id === connectionId) || view?.blockReason === 'publication_disabled'} onClick={() => automatic(false)}>
-          Autoriser la publication Facebook à échéance
+        </> : <button className="button" disabled={busy || loading || connectionsLoading || !!connectionsError || !connections.some(c => c.id === connectionId) || ['publication_disabled', 'workspace_automatic_disabled'].includes(view?.blockReason ?? '')} onClick={() => automatic(false)}>
+          Autoriser la publication {platformName} à échéance
         </button>}
       </div>}
       {loading && <p role="status">Chargement de l’opération…</p>}
@@ -239,7 +247,7 @@ export function PlatformPublication({
       )}
       {(workspaceId || view?.canPublish) && !preview && (
         <>
-        {workspaceId && !connectionId && <p>{post.platform === 1 ? 'Choisissez une Page ci-dessus. Un envoi automatique exige une autorisation explicite.' : 'Choisissez un profil ci-dessus pour préparer l’envoi. Le statut Scheduled ne déclenche pas de publication automatique.'}</p>}
+        {workspaceId && !connectionId && <p>{post.platform === 1 ? 'Choisissez une Page ci-dessus. Un envoi automatique exige une autorisation explicite.' : 'Choisissez un profil ci-dessus. Un envoi automatique exige une autorisation explicite.'}</p>}
         <button className="button primary" disabled={busy || loading || (!!workspaceId && (!view?.canPublish || !!unavailableReason))} onClick={prepare}>
           Publier sur {platformName}
         </button>

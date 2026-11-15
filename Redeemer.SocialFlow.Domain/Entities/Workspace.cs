@@ -27,6 +27,8 @@ public sealed class Workspace
         return new() { Id = Guid.NewGuid(), Name = name.Trim(), Type = type, Status = WorkspaceStatus.Active,
             CreatedAtUtc = (clock ?? TimeProvider.System).GetUtcNow(), PersonalOwnerUserId = type == WorkspaceType.Personal ? ownerUserId : null };
     }
+    public string? PublicationSettingsJson { get; private set; }
+    public void SetPublicationSettings(string settingsJson) => PublicationSettingsJson = settingsJson;
     public void Activate() => Status = WorkspaceStatus.Active;
 }
 
