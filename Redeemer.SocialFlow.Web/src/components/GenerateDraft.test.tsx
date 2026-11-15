@@ -48,6 +48,19 @@ describe('AI draft generation', () => {
     },
   )
 
+  it.each([1, 2] as const)('sends optional context for platform %s', async (platform) => {
+    const result = generatedDraft()
+    const generate = vi.spyOn(postsApi, 'generateDraft').mockResolvedValue(result)
+    const saved = vi.fn()
+    render(<GenerateDraft saved={saved} close={vi.fn()} />)
+    await fillBrief()
+    await userEvent.selectOptions(screen.getByLabelText('Plateforme'), String(platform))
+    await userEvent.type(screen.getByLabelText('Contexte complémentaire (facultatif)'), '  Une rencontre à Fribourg  ')
+    await userEvent.click(screen.getByRole('button', { name: 'Générer le brouillon' }))
+    expect(generate).toHaveBeenCalledWith(expect.objectContaining({ platform, context: 'Une rencontre à Fribourg' }))
+    expect(saved).toHaveBeenCalledWith(result)
+  })
+
   it('requires an explicit mode even with a complete brief', async () => {
     const generate = vi.spyOn(postsApi, 'generateDraft')
     render(<GenerateDraft saved={vi.fn()} close={vi.fn()} />)

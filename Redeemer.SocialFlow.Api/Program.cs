@@ -50,7 +50,8 @@ builder.Services.AddControllers(options =>
     options.Filters.AddService<AccountCsrfFilter>();
     options.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true;
     options.Conventions.Add(new FacebookEndpointsConvention(builder.Environment.IsDevelopment() && builder.Configuration.GetValue<bool>("Facebook:Enabled")));
-    options.Conventions.Add(new VisualEndpointsConvention(builder.Environment.IsDevelopment() && builder.Configuration.GetValue<bool>("Visuals:Enabled")));
+    options.Conventions.Add(new VisualEndpointsConvention(builder.Environment.IsDevelopment() && builder.Configuration.GetValue<bool>("Visuals:Enabled"),
+        builder.Configuration.GetValue<bool>("Visuals:WorkspaceEnabled")));
     if (!builder.Environment.IsDevelopment())
         options.Conventions.Add(new DevelopmentOnlyControllerConvention());
 });

@@ -1,11 +1,13 @@
+import { VisualIdentityEditor } from './VisualIdentityEditor'
 import { VisualIdentityLibrary } from './VisualIdentityLibrary'
 import { emptyIdentity } from '../lib/visualIdentities'
 import { useEffect, useRef, useState } from 'react'
 import { ApiError, type Post } from '../api/posts'
-import { visualsApi, type Visual } from '../api/visuals'
+import { visualsApi, workspaceVisualsApi, type Visual } from '../api/visuals'
 import { ErrorNotice } from './shared'
 
-export function VisualPreview({ postId, visual }: { postId: string; visual: Visual }) {
+export function VisualPreview({ postId, visual, workspace = false }: { postId: string; visual: Visual; workspace?: boolean }) {
+  const api = workspace ? workspaceVisualsApi : visualsApi
   const [url, setUrl] = useState('')
   const [error, setError] = useState<unknown>()
   useEffect(() => {
@@ -13,7 +15,7 @@ export function VisualPreview({ postId, visual }: { postId: string; visual: Visu
     let objectUrl: string | undefined
     setUrl('')
     setError(undefined)
-    void visualsApi
+    void api
       .image(postId, visual.id, controller.signal)
       .then((blob) => {
         if (controller.signal.aborted) return
@@ -27,7 +29,7 @@ export function VisualPreview({ postId, visual }: { postId: string; visual: Visu
       controller.abort()
       if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
-  }, [postId, visual.id])
+  }, [api, postId, visual.id])
   if (error) return <ErrorNotice error={error} />
   return url ? (
     <img
@@ -46,13 +48,16 @@ export function PostVisuals({
   readOnly = false,
   disabled = false,
   onBusy,
+  workspace = false,
 }: {
   post: Post
   brief?: string
   readOnly?: boolean
   disabled?: boolean
+  workspace?: boolean
   onBusy?: (busy: boolean) => void
 }) {
+  const api = workspace ? workspaceVisualsApi : visualsApi
   const [available, setAvailable] = useState<boolean>()
   const [visuals, setVisuals] = useState<Visual[]>([])
   const [error, setError] = useState<unknown>()
@@ -74,13 +79,13 @@ export function PostVisuals({
     setError(undefined)
     setAvailable(undefined)
     setVisuals([])
-    void visualsApi
+    void api
       .runtime(controller.signal)
       .then(async (runtime) => {
         if (controller.signal.aborted) return
         setAvailable(runtime.enabled)
         if (runtime.enabled) {
-          const result = await visualsApi.list(post.id, controller.signal)
+          const result = await api.list(post.id, controller.signal)
           if (!controller.signal.aborted) setVisuals(result)
         }
       })
@@ -98,7 +103,7 @@ export function PostVisuals({
       active.current?.abort()
       busyCallback.current?.(false)
     }
-  }, [post.id])
+  }, [api, post.id])
 
   async function run(label: string, operation: (signal: AbortSignal) => Promise<unknown>) {
     if (active.current || disabled) return
@@ -110,7 +115,7 @@ export function PostVisuals({
     setNotice('')
     try {
       await operation(controller.signal)
-      const result = await visualsApi.list(post.id, controller.signal)
+      const result = await api.list(post.id, controller.signal)
       if (mounted.current) setVisuals(result)
     } catch (err) {
       if (mounted.current) {
@@ -150,7 +155,7 @@ export function PostVisuals({
       return
     }
     void run('Génération en cours…', (signal) =>
-      visualsApi.generate(post.id, { ...identity, colors }, brief, signal),
+      api.generate(post.id, { ...identity, colors }, brief, signal),
     )
   }
   if (available === false)
@@ -173,11 +178,11 @@ export function PostVisuals({
         <fieldset disabled={locked}>
           <details>
             <summary>Identité visuelle pour la génération</summary>
-            <VisualIdentityLibrary
-              value={identity}
-              onChange={setIdentity}
-              onBusy={setIdentityBusy}
-            />
+            {workspace ? (
+              <VisualIdentityEditor value={identity} onChange={setIdentity} localLibrary={false} />
+            ) : (
+              <VisualIdentityLibrary value={identity} onChange={setIdentity} onBusy={setIdentityBusy} />
+            )}
           </details>
           <div className="visual-actions">
             <button
@@ -213,7 +218,7 @@ export function PostVisuals({
                     return
                   }
                   void run('Importation en cours…', (signal) =>
-                    visualsApi.upload(post.id, file, signal),
+                    api.upload(post.id, file, signal),
                   )
                 }}
               />
@@ -249,7 +254,7 @@ export function PostVisuals({
       <div className="visual-grid">
         {candidates.map((visual) => (
           <article className="visual-card" key={visual.id}>
-            <VisualPreview postId={post.id} visual={visual} />
+            <VisualPreview postId={post.id} visual={visual} workspace={workspace} />
             <p>
               {visual.selected ? 'Sélectionné et validé' : 'Candidat'} ·{' '}
               {visual.origin === 1 ? 'Généré' : 'Importé'}
@@ -266,7 +271,7 @@ export function PostVisuals({
                   disabled={!editable || locked || visual.selected}
                   onClick={() =>
                     void run('Sélection…', (signal) =>
-                      visualsApi.select(post.id, visual.id, signal),
+                      api.select(post.id, visual.id, signal),
                     )
                   }
                 >
@@ -278,7 +283,7 @@ export function PostVisuals({
                   disabled={!editable || locked || visual.selected}
                   onClick={() =>
                     void run('Suppression…', (signal) =>
-                      visualsApi.remove(post.id, visual.id, signal),
+                      api.remove(post.id, visual.id, signal),
                     )
                   }
                 >

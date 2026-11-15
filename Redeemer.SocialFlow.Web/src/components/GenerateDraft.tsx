@@ -18,6 +18,7 @@ export function GenerateDraft({
   const [subject, setSubject] = useState('')
   const [objective, setObjective] = useState('')
   const [audience, setAudience] = useState('')
+  const [context, setContext] = useState('')
   const [platform, setPlatform] = useState<Platform>(2)
   const [mode, setMode] = useState<'' | 1 | 2>('')
   const [message, setMessage] = useState('')
@@ -32,7 +33,7 @@ export function GenerateDraft({
     setError(undefined)
     setMessage('')
     try {
-      const result = await postsApi.generateDraft({ subject, objective, audience, platform, mode })
+      const result = await postsApi.generateDraft({ subject, objective, audience, platform, mode, ...(context.trim() ? { context: context.trim() } : {}) })
       if (result.outcome === 1) saved(result)
       else
         setMessage(
@@ -97,6 +98,10 @@ export function GenerateDraft({
           <label>
             Public cible
             <input required value={audience} onChange={(e) => setAudience(e.target.value)} />
+          </label>
+          <label>
+            Contexte complémentaire (facultatif)
+            <textarea rows={4} maxLength={4000} value={context} onChange={(e) => setContext(e.target.value)} />
           </label>
           <label>
             Plateforme

@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Redeemer.SocialFlow.Application.Accounts;
+using Redeemer.SocialFlow.Application.AI;
 using Redeemer.SocialFlow.Application.Knowledge;
 using Redeemer.SocialFlow.Application.SocialPosts;
 using Redeemer.SocialFlow.Application.Visuals;
@@ -20,6 +21,7 @@ using Redeemer.SocialFlow.Infrastructure.Knowledge;
 using Redeemer.SocialFlow.Infrastructure.Persistence;
 using Redeemer.SocialFlow.Infrastructure.Publishing;
 using Redeemer.SocialFlow.Infrastructure.Visuals;
+using SkiaSharp;
 using Xunit;
 
 namespace Redeemer.SocialFlow.IntegrationTests.Api;
@@ -33,6 +35,7 @@ public sealed partial class WorkspaceIsolationTests : IAsyncLifetime
     private WorkspaceDto a = null!, b = null!;
     private string aliceId = "", bobId = "";
     private readonly NoMail mailbox = new();
+    private readonly WorkspaceDraftGenerator draftGenerator = new();
     private const string Password = "Password-For-Test-123!";
 
     public async Task InitializeAsync()
@@ -43,13 +46,15 @@ public sealed partial class WorkspaceIsolationTests : IAsyncLifetime
         factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder => builder.UseEnvironment("Development")
             .UseSetting("ConnectionStrings:SocialFlow", business)
             .UseSetting("ConnectionStrings:Accounts", $"Data Source={Path.Combine(root, "accounts.db")};Pooling=False")
-            .UseSetting("Visuals:Enabled", "true").UseSetting("Facebook:Enabled", "true")
+            .UseSetting("Visuals:Enabled", "true").UseSetting("Visuals:WorkspaceEnabled", "true").UseSetting("Facebook:Enabled", "true")
             .UseSetting("LocalAdministration:Enabled", "false")
+            .UseSetting("Visuals:Storage:RootPath", Path.Combine(root, "workspace-visuals"))
             .UseSetting("SocialConnections:Encryption:ActiveKeyId", "test")
             .UseSetting("SocialConnections:Encryption:Keys:test", Convert.ToBase64String(new byte[32]))
             .ConfigureServices(services =>
             {
                 services.RemoveAll<IDataProtectionProvider>(); services.AddSingleton<IDataProtectionProvider>(new EphemeralDataProtectionProvider());
+                services.RemoveAll<IContentGenerator>(); services.AddSingleton<IContentGenerator>(draftGenerator);
                 services.RemoveAll<IAccountEmailSender>(); services.AddSingleton<IAccountEmailSender>(mailbox);
                 services.RemoveAll<IWorkspaceOAuthProvider>();
                 services.AddSingleton<IWorkspaceOAuthProvider>(socialProvider);
@@ -85,6 +90,67 @@ public sealed partial class WorkspaceIsolationTests : IAsyncLifetime
         var response = await Send(client, HttpMethod.Post, "/api/posts", new { title, content = "Private content", platform = 1 });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<SocialPostDto>())!;
+    }
+
+    [Theory]
+    [InlineData(SocialPlatform.Facebook)]
+    [InlineData(SocialPlatform.LinkedIn)]
+    public async Task WorkspaceAiDraft_ReceivesContext_AndVisualRoutesEnforceWorkspaceAndEdit(SocialPlatform platform)
+    {
+        var request = new { subject = "Topic", objective = "Inform", audience = "Members", platform, mode = 1, context = "  Additional context  " };
+        Assert.Equal(HttpStatusCode.BadRequest, (await alice.PostAsJsonAsync("/api/posts/generate-draft", request)).StatusCode);
+        var response = await Send(alice, HttpMethod.Post, "/api/posts/generate-draft", request);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var result = (await response.Content.ReadFromJsonAsync<GenerateSocialPostDraftExecutionResult>())!;
+        var post = result.Draft!.Post;
+        Assert.Equal(SocialPostStatus.Draft, post.Status);
+        Assert.Equal(platform, post.Platform);
+        Assert.Equal("Additional context", draftGenerator.Received?.Context);
+        var path = $"/api/posts/{post.Id}/workspace-visuals";
+        Assert.Equal(HttpStatusCode.OK, (await alice.GetAsync(path)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await bob.GetAsync(path)).StatusCode);
+
+        using var bitmap = new SKBitmap(16, 12);
+        bitmap.Erase(SKColors.Blue);
+        using var image = SKImage.FromBitmap(bitmap);
+        using var png = image.Encode(SKEncodedImageFormat.Png, 90);
+        using var form = new MultipartFormDataContent();
+        form.Add(new ByteArrayContent(png.ToArray()), "file", "visual.png");
+        var csrf = await alice.GetFromJsonAsync<JsonElement>("/api/auth/csrf");
+        using var upload = new HttpRequestMessage(HttpMethod.Post, path + "/upload") { Content = form };
+        upload.Headers.Add("X-CSRF-TOKEN", csrf.GetProperty("token").GetString());
+        using var uploaded = await alice.SendAsync(upload);
+        Assert.Equal(HttpStatusCode.Created, uploaded.StatusCode);
+        var visual = (await uploaded.Content.ReadFromJsonAsync<VisualDto>())!;
+        Assert.Equal(HttpStatusCode.OK, (await Send(alice, HttpMethod.Post, path + "/" + visual.Id + "/select")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await alice.GetAsync(path + "/" + visual.Id)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await bob.GetAsync(path + "/" + visual.Id)).StatusCode);
+        await using var db = Db(a.Id);
+        db.WorkspaceMemberships.Add(WorkspaceMembership.Join(a.Id, bobId));
+        await db.SaveChangesAsync();
+        var membership = await db.WorkspaceMemberships.SingleAsync(x => x.WorkspaceId == a.Id && x.UserId == bobId);
+        membership.Change(WorkspaceRole.Viewer, MembershipStatus.Active, 2);
+        await db.SaveChangesAsync();
+        bob.DefaultRequestHeaders.Remove("X-Workspace-Id");
+        bob.DefaultRequestHeaders.Add("X-Workspace-Id", a.Id.ToString());
+        Assert.Equal(HttpStatusCode.OK, (await bob.GetAsync(path)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Send(bob, HttpMethod.Post, "/api/posts/generate-draft", request)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Send(bob, HttpMethod.Post, path + "/generate",
+            new { identityId = "test", name = "Test", style = "Simple", colors = new[] { "#112233" } })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Send(bob, HttpMethod.Delete, path + "/" + Guid.NewGuid())).StatusCode);
+    }
+
+    private sealed class WorkspaceDraftGenerator : IContentGenerator
+    {
+        public GenerateContentRequest? Received { get; private set; }
+
+        public Task<ContentGenerationResult> GenerateAsync(GenerateContentRequest request, CancellationToken cancellationToken = default)
+        {
+            Received = request;
+            return Task.FromResult(new ContentGenerationResult(
+                new GeneratedContent("Draft title", "Draft content", null, "Image brief", []),
+                new ContentGenerationMetadata("Test", "Test model")));
+        }
     }
 
     [Fact]

@@ -8,5 +8,7 @@ public sealed record GenerateContentRequest(
 	string Audience,
 	SocialPlatform Platform)
 {
+    public string? Context { get; init; }
+
     public IReadOnlyList<Knowledge.KnowledgePassage> ReferencePassages { get; init; } = Array.Empty<Knowledge.KnowledgePassage>();
 }

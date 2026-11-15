@@ -9,4 +9,5 @@ public sealed record GenerateDraftRequest(
     [Required] string Objective,
     [Required] string Audience,
     [Required, EnumDataType(typeof(SocialPlatform))] SocialPlatform? Platform,
-    [Required, EnumDataType(typeof(SocialPostGenerationMode))] SocialPostGenerationMode? Mode);
+    [Required, EnumDataType(typeof(SocialPostGenerationMode))] SocialPostGenerationMode? Mode,
+    [StringLength(4000)] string? Context = null);

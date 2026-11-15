@@ -48,6 +48,7 @@ export interface GenerateDraftRequest {
   audience: string
   platform: Platform
   mode: 1 | 2
+  context?: string
 }
 export interface KnowledgePassage {
   knowledgeChunkId: string
@@ -188,10 +189,10 @@ const request = <T>(path: string, options: RequestInit = {}) =>
   apiRequest<T>(`/posts${path}`, options)
 export const postsApi = {
   trash: (signal?: AbortSignal) => request<TrashedPost[]>('/trash', { signal }),
-  generateDraft: ({ subject, objective, audience, platform, mode }: GenerateDraftRequest) =>
+  generateDraft: ({ subject, objective, audience, platform, mode, context }: GenerateDraftRequest) =>
     request<GenerateSocialPostDraftResult>('/generate-draft', {
       method: 'POST',
-      body: JSON.stringify({ subject, objective, audience, platform, mode }),
+      body: JSON.stringify({ subject, objective, audience, platform, mode, context }),
     }),
   list(filters: Filters = {}, signal?: AbortSignal) {
     const query = new URLSearchParams()

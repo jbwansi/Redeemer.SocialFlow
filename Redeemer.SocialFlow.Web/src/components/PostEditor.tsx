@@ -109,8 +109,9 @@ export function PostEditor({
             </p>
           )}
         </fieldset>
-        {localAdministration && post && import.meta.env.DEV && (
+        {post && (!localAdministration || import.meta.env.DEV) && (
           <PostVisuals
+            workspace={!localAdministration}
             post={post}
             brief={brief}
             disabled={busy || visualBusy}

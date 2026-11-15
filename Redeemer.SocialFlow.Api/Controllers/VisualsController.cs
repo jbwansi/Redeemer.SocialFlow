@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Redeemer.SocialFlow.Api.Development.Visuals;
 using Redeemer.SocialFlow.Application.AI;
 using Redeemer.SocialFlow.Application.Visuals;
@@ -12,7 +13,20 @@ public sealed record GenerateVisualApiRequest(string IdentityId, string Name, st
 [Route("api/posts/{postId:guid}/visuals")]
 [ServiceFilter(typeof(LocalVisualAccessFilter))]
 [TypeFilter(typeof(VisualApiExceptionFilter))]
-public sealed class VisualsController(PostVisualService visuals) : ControllerBase
+public sealed class VisualsController(PostVisualService visuals) : PostVisualActions(visuals) { }
+
+[ApiController]
+[Route("api/posts/{postId:guid}/workspace-visuals")]
+[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+[Authorize(Policy = "WorkspaceMember")]
+[TypeFilter(typeof(VisualApiExceptionFilter))]
+public sealed class WorkspaceVisualsController(PostVisualService visuals) : PostVisualActions(visuals)
+{
+    [HttpGet("/api/posts/workspace-visuals/status")]
+    public IActionResult Status() => Ok(new { enabled = true });
+}
+
+public abstract class PostVisualActions(PostVisualService visuals) : ControllerBase
 {
     [HttpPost("upload")]
     [RequestSizeLimit(21 * 1024 * 1024)]
@@ -48,6 +62,7 @@ public sealed class VisualsController(PostVisualService visuals) : ControllerBas
     public async Task<IActionResult> Get(Guid postId, Guid visualId, CancellationToken token)
     {
         var content = await visuals.ReadAsync(postId, visualId, token);
+        Response.Headers["X-Content-Type-Options"] = "nosniff";
         return File(content.Bytes, content.ContentType); // Inline preview through this protected route only.
     }
     [HttpPost("{visualId:guid}/select")]

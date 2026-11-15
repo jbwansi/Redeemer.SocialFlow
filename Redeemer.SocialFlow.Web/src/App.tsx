@@ -222,7 +222,7 @@ export default function App({
               <p>{pages[page].description}</p>
             </div>
             <div className="heading-actions">
-              {localAdministration && page === 'posts' && (
+              {canEdit && page === 'posts' && (
                 <button className="button" onClick={() => setGenerating(true)}>
                   Générer un brouillon
                 </button>

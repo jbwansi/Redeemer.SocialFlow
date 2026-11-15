@@ -119,7 +119,7 @@ export function PostDetails({
             <p className="url-text">{post.visualUrl}</p>
           </section>
         )}
-        {localAdministration && import.meta.env.DEV && <PostVisuals post={post} readOnly />}
+        {(!localAdministration || import.meta.env.DEV) && <PostVisuals post={post} readOnly workspace={!localAdministration} />}
         <div className="detail-dates">
           <span>Created {dateLabel(post.createdAt)}</span>
           {post.scheduledAt && (

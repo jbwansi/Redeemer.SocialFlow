@@ -15,7 +15,8 @@ namespace Redeemer.SocialFlow.Api.Controllers;
 public sealed class PostsController(ISocialPostService posts) : ControllerBase
 {
     [HttpPost("generate-draft")]
-    [Authorize(Policy = "LocalAdministrationOnly")]
+    [Authorize(Policy = "WorkspaceEdit")]
+    [RequestSizeLimit(64 * 1024)]
     [EndpointSummary("Generate and save an AI-assisted draft post")]
     [EndpointDescription("201: Draft created. 200: NoRelevantPassages or ContextLimitExceeded, no post created and no editorial fallback. References are returned context, not persisted citations.")]
     [ProducesResponseType<GenerateSocialPostDraftExecutionResult>(StatusCodes.Status201Created)]
@@ -32,7 +33,7 @@ public sealed class PostsController(ISocialPostService posts) : ControllerBase
             // Resolve here so configuration failures receive the same safe response as generation failures.
             var useCase = HttpContext.RequestServices.GetRequiredService<IGenerateSocialPostDraft>();
             var result = await useCase.ExecuteAsync(new GenerateContentRequest(
-                request.Subject, request.Objective, request.Audience, request.Platform!.Value), request.Mode!.Value, cancellationToken);
+                request.Subject, request.Objective, request.Audience, request.Platform!.Value) { Context = request.Context?.Trim() }, request.Mode!.Value, cancellationToken);
             if (result.Outcome != SocialPostDraftOutcome.Created)
                 return Ok(result);
             return CreatedAtAction(nameof(GetById), new { id = result.PostId }, result);
