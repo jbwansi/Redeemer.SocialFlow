@@ -3,7 +3,8 @@ using Redeemer.SocialFlow.Application.AI;
 
 namespace Redeemer.SocialFlow.Application.Knowledge;
 
-public sealed class GenerateGroundedContent(IKnowledgePassageSearch search, IContentGenerator generator)
+public sealed class GenerateGroundedContent(IKnowledgePassageSearch search, IContentGenerator generator,
+    DraftGenerationProgress? progress = null)
     : IGenerateGroundedContent
 {
     public const int MaximumPassages = 5;
@@ -14,6 +15,7 @@ public sealed class GenerateGroundedContent(IKnowledgePassageSearch search, ICon
     {
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
+        if (progress is not null) progress.Stage = DraftGenerationStage.KnowledgeSearch;
         var passages = await search.SearchForGenerationAsync(new(request.Subject, MaximumPassages), cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
         if (passages.Count == 0)
@@ -33,6 +35,7 @@ public sealed class GenerateGroundedContent(IKnowledgePassageSearch search, ICon
             return new(GroundedContentOutcome.ContextLimitExceeded, null, Array.Empty<KnowledgePassage>());
         var references = selected.AsReadOnly();
         // Only retrieved, bounded references are passed, never caller-supplied references.
+        if (progress is not null) progress.Stage = DraftGenerationStage.ProviderCall;
         var result = await generator.GenerateAsync(request with { ReferencePassages = references }, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
         return new(GroundedContentOutcome.Generated, result, references);

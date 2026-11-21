@@ -21,10 +21,7 @@ public sealed class VisualsController(PostVisualService visuals) : PostVisualAct
 [Authorize(Policy = "WorkspaceMember")]
 [TypeFilter(typeof(VisualApiExceptionFilter))]
 public sealed class WorkspaceVisualsController(PostVisualService visuals) : PostVisualActions(visuals)
-{
-    [HttpGet("/api/posts/workspace-visuals/status")]
-    public IActionResult Status() => Ok(new { enabled = true });
-}
+{ }
 
 public abstract class PostVisualActions(PostVisualService visuals) : ControllerBase
 {

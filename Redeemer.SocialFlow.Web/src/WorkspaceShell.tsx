@@ -3,7 +3,9 @@ import App from './App'
 import { Team } from './pages/Team'
 import { roleNames } from './api/team'
 import { workspacesApi, type Workspace } from './api/workspaces'
-import { setActiveWorkspace } from './api/workspaceTransport'
+import { expireSession, setActiveWorkspace } from './api/workspaceTransport'
+import { AccountError } from './api/accounts'
+import { ApiError } from './api/posts'
 import { setLocalAdministration } from './api/posts'
 import './workspaces.css'
 
@@ -25,6 +27,14 @@ export function WorkspaceShell({
   const [directory, setDirectory] = useState(true)
   const [team, setTeam] = useState(false)
   const pending = useRef<AbortController | null>(null)
+  function sessionFailure(error: unknown) {
+    if ((error instanceof AccountError && error.status === 401) ||
+        (error instanceof ApiError && error.problem.status === 401)) {
+      expireSession()
+      return true
+    }
+    return false
+  }
 
   useEffect(() => {
     setLocalAdministration(false)
@@ -51,21 +61,23 @@ export function WorkspaceShell({
             setError('Connexion sociale refusée ou expirée. Ouvrez votre espace et recommencez.')
           }
         }
-      } catch {
-        if (!controller.signal.aborted)
+      } catch (failure) {
+        if (!controller.signal.aborted && !sessionFailure(failure))
           setError('Vos espaces sont indisponibles. Réessayez ou contactez votre administrateur.')
       } finally {
         if (!controller.signal.aborted) setLoading(false)
       }
     }
     void load()
-    const lost = () => {
+    const lost = (event: Event) => {
       pending.current?.abort()
       setActiveWorkspace(null)
       setActive(null)
       setDirectory(true)
       setLoading(false)
-      setError('Accès à cet espace refusé ou session expirée. Rechargez vos espaces.')
+      const revokedId = (event as CustomEvent<{ workspaceId?: string }>).detail?.workspaceId
+      setWorkspaces(list => revokedId ? list.filter(item => item.id !== revokedId) : [])
+      setError('Accès à cet espace refusé. Rechargez vos espaces.')
     }
     window.addEventListener('workspace-access-lost', lost)
     return () => {
@@ -92,8 +104,8 @@ export function WorkspaceShell({
       setActive(selected)
       setDirectory(false)
       location.hash = destination
-    } catch {
-      if (!controller.signal.aborted) {
+    } catch (failure) {
+      if (!controller.signal.aborted && !sessionFailure(failure)) {
         setDirectory(true)
         setError('Cet espace est inaccessible.')
       }
@@ -114,8 +126,8 @@ export function WorkspaceShell({
       setWorkspaces((list) => [...list, workspace])
       setName('')
       await select(workspace.id)
-    } catch {
-      if (!controller.signal.aborted) setError('Impossible de créer cet espace. Réessayez.')
+    } catch (failure) {
+      if (!controller.signal.aborted && !sessionFailure(failure)) setError('Impossible de créer cet espace. Réessayez.')
     } finally {
       if (!controller.signal.aborted) setLoading(false)
     }

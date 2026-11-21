@@ -1,4 +1,10 @@
 import { apiRequest } from './posts'
+export interface VisualAvailability {
+  enabled: boolean
+  uploadEnabled?: boolean
+  generationEnabled?: boolean
+  reason?: string | null
+}
 export interface Visual {
   id: string
   socialPostId: string
@@ -39,7 +45,7 @@ function createVisualsApi(workspace: boolean) {
   const path = (post: string) =>
     '/posts/' + encodeURIComponent(post) + (workspace ? '/workspace-visuals' : '/visuals')
   return {
-  runtime: (signal?: AbortSignal) => request<{ enabled: boolean }>(
+  runtime: (signal?: AbortSignal) => request<VisualAvailability>(
     workspace ? '/posts/workspace-visuals/status' : '/status', { signal }),
   list: (post: string, signal?: AbortSignal) => request<Visual[]>(path(post), { signal }),
   image: (post: string, id: string, signal?: AbortSignal) =>

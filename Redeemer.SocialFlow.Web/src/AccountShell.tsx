@@ -1,9 +1,10 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import App from './App'
 import { InvitationAcceptance } from './InvitationAcceptance'
 import { WorkspaceShell } from './WorkspaceShell'
 import { AccountError, accountRequest, type Account } from './api/accounts'
 import { setLocalAdministration } from './api/posts'
+import { expireSession, setActiveWorkspace } from './api/workspaceTransport'
 import './accounts.css'
 
 const pages = [
@@ -49,6 +50,25 @@ export default function AccountShell() {
   const [message, setMessage] = useState('')
   const [local, setLocal] = useState(false)
   const secure = location.protocol === 'https:'
+  const session = useRef({ revision: 0, invalidated: false, authenticated: false })
+
+  useEffect(() => {
+    const expired = () => {
+      session.current = { revision: session.current.revision + 1, invalidated: true, authenticated: false }
+      setActiveWorkspace(null)
+      setAccount(null)
+      setLocal(false)
+      setLocalAdministration(false)
+      setPassword('')
+      setBusy(false)
+      setLoading(false)
+      setPage('login')
+      history.replaceState(null, '', '/#login')
+      setError('Votre session a expiré ou n’est plus valide. Veuillez vous reconnecter.')
+    }
+    window.addEventListener('session-expired', expired)
+    return () => window.removeEventListener('session-expired', expired)
+  }, [])
 
   useEffect(() => {
     if (initial.params.has('code')) history.replaceState(null, '', `/#${initial.page}`)
@@ -65,18 +85,25 @@ export default function AccountShell() {
   useEffect(() => {
     let active = true
     async function refresh() {
+      if (session.current.invalidated) return
+      const revision = session.current.revision
       if (!secure) {
         if (active) setLoading(false)
         return
       }
       try {
         const profile = await accountRequest<Account>('me')
-        if (active) {
+        if (active && revision === session.current.revision) {
+          session.current.authenticated = true
           setAccount(profile)
           setError('')
         }
       } catch (failure) {
-        if (active) {
+        if (active && revision === session.current.revision) {
+          if (failure instanceof AccountError && failure.status === 401 && session.current.authenticated) {
+            expireSession()
+            return
+          }
           setAccount(null)
           if (!(failure instanceof AccountError && failure.status === 401))
             setError('Impossible de vérifier votre session. Réessayez.')
@@ -126,7 +153,11 @@ export default function AccountShell() {
               : { email }
       await accountRequest(page, body)
       setPassword('')
-      if (page === 'login') setAccount(await accountRequest<Account>('me'))
+      if (page === 'login') {
+        const profile = await accountRequest<Account>('me')
+        session.current = { revision: session.current.revision + 1, invalidated: false, authenticated: true }
+        setAccount(profile)
+      }
       else
         setMessage(
           page === 'confirm-email'

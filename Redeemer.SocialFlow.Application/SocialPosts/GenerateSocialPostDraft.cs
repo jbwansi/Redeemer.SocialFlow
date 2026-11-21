@@ -6,7 +6,7 @@ using Redeemer.SocialFlow.Domain.Entities;
 namespace Redeemer.SocialFlow.Application.SocialPosts;
 
 public sealed class GenerateSocialPostDraft(IContentGenerator generator, ISocialFlowDbContext context,
-    IGenerateGroundedContent groundedGenerator)
+    IGenerateGroundedContent groundedGenerator, DraftGenerationProgress? progress = null)
     : IGenerateSocialPostDraft
 {
     public async Task<GenerateSocialPostDraftResult> ExecuteAsync(
@@ -23,7 +23,9 @@ public sealed class GenerateSocialPostDraft(IContentGenerator generator, ISocial
         IReadOnlyList<KnowledgePassage> references = Array.Empty<KnowledgePassage>();
         if (mode == SocialPostGenerationMode.Grounded)
         {
+            if (progress is not null) progress.Stage = DraftGenerationStage.KnowledgeSearch;
             var grounded = await groundedGenerator.ExecuteAsync(request, cancellationToken);
+            if (progress is not null) progress.Stage = DraftGenerationStage.ResponseValidation;
             cancellationToken.ThrowIfCancellationRequested();
             if (grounded.Outcome == GroundedContentOutcome.NoRelevantPassages)
                 return new(SocialPostDraftOutcome.NoRelevantPassages, null, null, references);
@@ -36,8 +38,10 @@ public sealed class GenerateSocialPostDraft(IContentGenerator generator, ISocial
         }
         else
         {
+            if (progress is not null) progress.Stage = DraftGenerationStage.ProviderCall;
             generation = await generator.GenerateAsync(request, cancellationToken);
         }
+        if (progress is not null) progress.Stage = DraftGenerationStage.ResponseValidation;
         var generated = generation.Content;
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -45,6 +49,7 @@ public sealed class GenerateSocialPostDraft(IContentGenerator generator, ISocial
         post.Update(generated.Title, generated.Content, generated.CallToAction, generated.VisualBrief);
         var audit = AiGeneration.Create(post.Id, request.Subject, request.Objective, request.Audience,
             request.Platform, generation.Metadata.Provider, generation.Metadata.Model, generated.Warnings);
+        if (progress is not null) progress.Stage = DraftGenerationStage.Persistence;
         context.SocialPosts.Add(post);
         context.AiGenerations.Add(audit);
         await context.SaveChangesAsync(cancellationToken);

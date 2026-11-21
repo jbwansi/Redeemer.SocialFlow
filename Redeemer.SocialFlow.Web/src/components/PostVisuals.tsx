@@ -3,7 +3,7 @@ import { VisualIdentityLibrary } from './VisualIdentityLibrary'
 import { emptyIdentity } from '../lib/visualIdentities'
 import { useEffect, useRef, useState } from 'react'
 import { ApiError, type Post } from '../api/posts'
-import { visualsApi, workspaceVisualsApi, type Visual } from '../api/visuals'
+import { visualsApi, workspaceVisualsApi, type Visual, type VisualAvailability } from '../api/visuals'
 import { ErrorNotice } from './shared'
 
 export function VisualPreview({ postId, visual, workspace = false }: { postId: string; visual: Visual; workspace?: boolean }) {
@@ -59,6 +59,8 @@ export function PostVisuals({
 }) {
   const api = workspace ? workspaceVisualsApi : visualsApi
   const [available, setAvailable] = useState<boolean>()
+  const [capabilities, setCapabilities] = useState<VisualAvailability>()
+  const [loaded, setLoaded] = useState(false)
   const [visuals, setVisuals] = useState<Visual[]>([])
   const [error, setError] = useState<unknown>()
   const [loading, setLoading] = useState(true)
@@ -71,27 +73,32 @@ export function PostVisuals({
   const busyCallback = useRef(onBusy)
   busyCallback.current = onBusy
   const editable = !readOnly && (post.status === 1 || post.status === 6)
-  const locked = disabled || !!busy || loading || identityBusy
+  const locked = disabled || !!busy || loading || identityBusy || (workspace && (!loaded || available !== true))
+  const canGenerate = !workspace || capabilities?.generationEnabled === true
+  const canUpload = !workspace || capabilities?.uploadEnabled === true
   useEffect(() => {
     mounted.current = true
     const controller = new AbortController()
     setLoading(true)
     setError(undefined)
     setAvailable(undefined)
+    setCapabilities(undefined)
+    setLoaded(false)
     setVisuals([])
     void api
       .runtime(controller.signal)
       .then(async (runtime) => {
         if (controller.signal.aborted) return
         setAvailable(runtime.enabled)
+        setCapabilities(runtime)
         if (runtime.enabled) {
           const result = await api.list(post.id, controller.signal)
-          if (!controller.signal.aborted) setVisuals(result)
+          if (!controller.signal.aborted) { setVisuals(result); setLoaded(true) }
         }
       })
       .catch((err) => {
         if (controller.signal.aborted) return
-        if (err instanceof ApiError && err.problem.status === 404) setAvailable(false)
+        if (!workspace && err instanceof ApiError && err.problem.status === 404) setAvailable(false)
         else setError(err)
       })
       .finally(() => {
@@ -134,7 +141,7 @@ export function PostVisuals({
     }
   }
   function generate() {
-    if (!editable || locked || identity.isActive === false) return
+    if (!editable || locked || !canGenerate || identity.isActive === false) return
     const colors = identity.colors
     if (
       !brief.trim() ||
@@ -159,7 +166,7 @@ export function PostVisuals({
     )
   }
   if (available === false)
-    return readOnly ? null : (
+    return workspace ? <p className="field-note">Les visuels sont désactivés pour cet environnement.</p> : readOnly ? null : (
       <p className="field-note">Gestion des visuels désactivée sur ce poste.</p>
     )
   if (loading) return <p role="status">Chargement des visuels…</p>
@@ -167,6 +174,15 @@ export function PostVisuals({
   return (
     <section className="visual-manager" aria-label="Visuels de la publication">
       <h3>{readOnly ? 'Visuel sélectionné' : 'Visuels de la publication'}</h3>
+      {workspace && error != null && <p role="alert">
+        {error instanceof ApiError && error.problem.status === 403
+          ? 'Accès aux visuels refusé pour cette opération.'
+          : error instanceof ApiError && error.problem.status === 401
+            ? 'Session expirée. Reconnectez-vous pour accéder aux visuels.'
+            : 'Impossible de charger ou traiter les visuels. Réessayez après actualisation.'}
+      </p>}
+      {workspace && capabilities?.reason === 'ImageGenerationNotConfigured' &&
+        <p className="field-note">La génération d’images n’est pas configurée. L’importation reste disponible si le chargement réussit.</p>}
       {error != null && <ErrorNotice error={error} />}
       {notice && <p role="status">{notice}</p>}
       {!readOnly && !editable && (
@@ -188,7 +204,7 @@ export function PostVisuals({
             <button
               type="button"
               className="button primary"
-              disabled={identity.isActive === false}
+              disabled={identity.isActive === false || !canGenerate}
               onClick={generate}
             >
               {visuals.length ? 'Régénérer' : 'Générer un visuel'}
@@ -199,11 +215,12 @@ export function PostVisuals({
                 className="visual-file-input"
                 aria-label="Importer une image"
                 type="file"
+                disabled={!canUpload}
                 accept="image/png,image/jpeg"
                 onChange={(e) => {
                   const file = e.target.files?.[0]
                   e.target.value = ''
-                  if (!file || !editable || locked) return
+                  if (!file || !editable || locked || !canUpload) return
                   if (
                     !['image/png', 'image/jpeg'].includes(file.type) ||
                     file.size > 20 * 1024 * 1024 ||

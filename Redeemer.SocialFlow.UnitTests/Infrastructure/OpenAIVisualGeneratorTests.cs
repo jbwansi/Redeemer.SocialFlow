@@ -19,6 +19,19 @@ namespace Redeemer.SocialFlow.UnitTests.Infrastructure;
 public sealed class OpenAIVisualGeneratorTests
 {
     private const string Model = "gpt-image-1";
+    [Fact]
+    public async Task Image15_UsesExistingImagesEndpointAndSupportedParameters()
+    {
+        using var harness = new Harness(Png(), options => options.Model = "gpt-image-1.5");
+        await harness.Generator.GenerateAsync(Request());
+        var sent = Assert.Single(harness.Handler.Requests);
+        Assert.Equal("https://api.openai.com/v1/images/generations", sent.Uri.ToString());
+        using var json = JsonDocument.Parse(sent.Body);
+        Assert.Equal("gpt-image-1.5", json.RootElement.GetProperty("model").GetString());
+        Assert.Equal("png", json.RootElement.GetProperty("output_format").GetString());
+        Assert.Equal("medium", json.RootElement.GetProperty("quality").GetString());
+        Assert.False(json.RootElement.TryGetProperty("response_format", out _));
+    }
     private static VisualIdentity Identity => new("brand-a", "Brand A", "Clean and human", ["#123456"], "Together");
     private static GenerateVisualRequest Request(SocialPlatform platform = SocialPlatform.LinkedIn,
         VisualLayout? layout = null) => new("A team working together", platform, Identity, layout);
@@ -337,7 +350,7 @@ public sealed class OpenAIVisualGeneratorTests
             _http = new HttpClient(Handler);
             var settings = new OpenAIVisualGeneratorOptions { ApiKey = "unit-test-placeholder", Model = Model };
             configure?.Invoke(settings);
-            var client = new ImageClient(Model, new ApiKeyCredential(settings.ApiKey), new OpenAIClientOptions
+            var client = new ImageClient(settings.Model, new ApiKeyCredential(settings.ApiKey), new OpenAIClientOptions
             {
                 Transport = new HttpClientPipelineTransport(_http), RetryPolicy = new ClientRetryPolicy(maxRetries: 0)
             });

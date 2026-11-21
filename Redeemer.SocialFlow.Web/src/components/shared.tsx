@@ -38,6 +38,7 @@ export function ErrorNotice({ error, retry }: { error: unknown; retry?: () => vo
             )}
           </ul>
         )}
+        {problem.code === 'DraftGenerationFailed' && <small>Code: DraftGenerationFailed</small>}
         {problem.traceId && <small>Reference: {problem.traceId}</small>}
         {retry && (
           <button className="text-button" onClick={retry}>

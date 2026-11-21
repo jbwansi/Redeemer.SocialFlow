@@ -1,5 +1,5 @@
-import { accountRequest } from './accounts'
-import { workspaceRequest } from './workspaceTransport'
+import { accountRequest, AccountError } from './accounts'
+import { expireSession, handleWorkspaceDenial, workspaceRequest } from './workspaceTransport'
 
 export const platforms = { 1: 'Facebook', 2: 'LinkedIn', 3: 'Instagram' } as const
 export const statuses = {
@@ -94,6 +94,7 @@ export interface Filters {
 }
 export type WorkflowAction = 'submit-for-review' | 'approve' | 'reject' | 'schedule' | 'cancel'
 export interface ProblemDetails {
+  code?: string
   title?: string
   detail?: string
   status?: number
@@ -151,6 +152,11 @@ export async function apiRequest<T>(
       },
     })
   } catch (error) {
+    workspace.assertCurrent()
+    if (workspace.id && error instanceof AccountError && error.status === 401) {
+      expireSession()
+      throw error
+    }
     if (
       typeof error === 'object' &&
       error !== null &&
@@ -172,8 +178,8 @@ export async function apiRequest<T>(
       /* Proxy failures may not contain JSON. */
     }
     workspace.assertCurrent()
-    if (workspace.id && (response.status === 401 || response.status === 403))
-      window.dispatchEvent(new CustomEvent('workspace-access-lost'))
+    if (workspace.id && !localAdministration && !transport.baseUrl)
+      await handleWorkspaceDenial(response.status, workspace, signal)
     throw new ApiError({ ...problem, status: response.status })
   }
   const result =

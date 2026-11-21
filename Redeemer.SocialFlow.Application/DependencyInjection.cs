@@ -7,6 +7,7 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
+        services.AddScoped<AI.DraftGenerationProgress>();
         services.AddScoped<ISocialPostService, SocialPostService>();
         services.AddScoped<IListTrashedSocialPosts, ListTrashedSocialPosts>();
         services.AddScoped<IGenerateSocialPostDraft, GenerateSocialPostDraft>();

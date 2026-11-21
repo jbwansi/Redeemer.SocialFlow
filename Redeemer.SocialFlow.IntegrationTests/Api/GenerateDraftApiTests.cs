@@ -19,7 +19,7 @@ using Xunit;
 
 namespace Redeemer.SocialFlow.IntegrationTests.Api;
 
-public sealed class GenerateDraftApiTests : IAsyncLifetime
+public sealed partial class GenerateDraftApiTests : IAsyncLifetime
 {
     private readonly string _path = Path.Combine(Path.GetTempPath(), $"socialflow-draft-api-{Guid.NewGuid():N}.db");
     private readonly Generator _generator = new();
@@ -216,7 +216,8 @@ public sealed class GenerateDraftApiTests : IAsyncLifetime
         foreach (var secret in new[] { "secret-api-key", "Authorization", "sensitive-generated-text", "InvalidOperationException" })
         {
             Assert.DoesNotContain(secret, body);
-            Assert.DoesNotContain(_logs.Messages, message => message.Contains(secret));
+            if (secret != "InvalidOperationException")
+                Assert.DoesNotContain(_logs.Messages, message => message.Contains(secret));
         }
         await AssertNoPosts();
     }
@@ -341,6 +342,7 @@ public sealed class GenerateDraftApiTests : IAsyncLifetime
 
     private sealed class Search : IKnowledgePassageSearch
     {
+        public Exception? Failure { get; set; }
         public int Calls { get; private set; }
         public bool Empty { get; set; }
         public bool Oversized { get; set; }
@@ -349,6 +351,7 @@ public sealed class GenerateDraftApiTests : IAsyncLifetime
         public Task<IReadOnlyList<KnowledgePassage>> SearchForGenerationAsync(SearchKnowledgePassagesRequest request, CancellationToken cancellationToken = default)
         {
             Calls++;
+            if (Failure is not null) throw Failure;
             return Task.FromResult<IReadOnlyList<KnowledgePassage>>(Empty ? [] :
                 new[] { Oversized ? Passage with { Content = new string('x', 12001) } : Passage });
         }
@@ -373,14 +376,21 @@ public sealed class GenerateDraftApiTests : IAsyncLifetime
     private sealed class Logs : ILoggerProvider
     {
         public ConcurrentQueue<string> Messages { get; } = new();
-        public ILogger CreateLogger(string categoryName) => new Capture(Messages);
+        public ConcurrentQueue<(EventId Event, IReadOnlyDictionary<string, object?> Fields, Exception? Exception)> Events { get; } = new();
+        public ILogger CreateLogger(string categoryName) => new Capture(Messages, Events);
         public void Dispose() { }
-        private sealed class Capture(ConcurrentQueue<string> messages) : ILogger
+        private sealed class Capture(ConcurrentQueue<string> messages,
+            ConcurrentQueue<(EventId Event, IReadOnlyDictionary<string, object?> Fields, Exception? Exception)> events) : ILogger
         {
             public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
             public bool IsEnabled(LogLevel logLevel) => true;
             public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
-                Func<TState, Exception?, string> formatter) => messages.Enqueue(formatter(state, exception) + exception);
+                Func<TState, Exception?, string> formatter)
+            {
+                messages.Enqueue(formatter(state, exception) + exception);
+                if (eventId.Name == "DraftGenerationFailed")
+                    events.Enqueue((eventId, ((IEnumerable<KeyValuePair<string, object?>>)(object)state!).ToDictionary(x => x.Key, x => x.Value), exception));
+            }
         }
     }
 }

@@ -1,9 +1,10 @@
 // @vitest-environment-options { "url": "https://localhost:65474/" }
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, expect, it, vi } from 'vitest'
 import AccountShell from './AccountShell'
 import { accountRequest, AccountError } from './api/accounts'
+import { setActiveWorkspace, workspaceRequest } from './api/workspaceTransport'
 
 vi.mock('./api/accounts', async () => {
   const actual = await vi.importActual<typeof import('./api/accounts')>('./api/accounts')
@@ -17,6 +18,24 @@ vi.mock('./api/team', async () => ({
 beforeEach(() => {
   history.replaceState(null, '', '/#login')
   vi.mocked(accountRequest).mockReset().mockRejectedValue(new AccountError(401, 'Session requise'))
+})
+
+it('removes authenticated content on session expiration and ignores an older profile response', async () => {
+  vi.mocked(accountRequest).mockResolvedValue({ id: 'one', email: 'person@example.test' })
+  render(<AccountShell />)
+  await screen.findByText('person@example.test')
+  let finish!: (value: { id: string; email: string }) => void
+  vi.mocked(accountRequest).mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+  fireEvent(window, new Event('focus'))
+  setActiveWorkspace('holding')
+  const previous = workspaceRequest()
+  fireEvent(window, new Event('session-expired'))
+  expect(await screen.findByRole('button', { name: 'Se connecter' })).toBeInTheDocument()
+  expect(screen.getByRole('alert')).toHaveTextContent('Veuillez vous reconnecter')
+  expect(screen.queryByText('person@example.test')).not.toBeInTheDocument()
+  expect(previous.signal.aborted).toBe(true)
+  await act(async () => finish({ id: 'one', email: 'person@example.test' }))
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Se connecter' })).toBeInTheDocument())
 })
 
 it('keeps invitation acceptance available after login and removes the token from the address bar', async () => {

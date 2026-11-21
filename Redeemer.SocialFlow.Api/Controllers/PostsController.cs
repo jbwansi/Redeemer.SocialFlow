@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Redeemer.SocialFlow.Api.Contracts;
 using Redeemer.SocialFlow.Application.AI;
 using Redeemer.SocialFlow.Application.SocialPosts;
+using Redeemer.SocialFlow.Api.Errors;
 
 namespace Redeemer.SocialFlow.Api.Controllers;
 
@@ -28,6 +29,7 @@ public sealed class PostsController(ISocialPostService posts) : ControllerBase
             return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Invalid request",
                 detail: "A generation brief is required.");
 
+        var progress = HttpContext.RequestServices.GetRequiredService<DraftGenerationProgress>();
         try
         {
             // Resolve here so configuration failures receive the same safe response as generation failures.
@@ -42,11 +44,20 @@ public sealed class PostsController(ISocialPostService posts) : ControllerBase
         {
             return StatusCode(StatusCodes.Status499ClientClosedRequest);
         }
-        catch (Exception)
+        catch (Exception error)
         {
-            // Provider exceptions can contain credentials and generated text; never forward or log them.
-            return Problem(statusCode: StatusCodes.Status500InternalServerError,
+            var traceId = System.Diagnostics.Activity.Current?.Id ?? HttpContext.TraceIdentifier;
+            DraftGenerationDiagnostics.Record(
+                HttpContext.RequestServices.GetRequiredService<ILogger<PostsController>>(),
+                error, progress.Stage, traceId,
+                HttpContext.RequestServices.GetRequiredService<IConfiguration>());
+            var response = Problem(statusCode: StatusCodes.Status500InternalServerError,
                 title: "Draft generation failed", detail: "The draft could not be generated and saved. Please try again later.");
+            // MVC already supplies traceId; replace it rather than adding a duplicate extension.
+            var problem = (ProblemDetails)response.Value!;
+            problem.Extensions["code"] = DraftGenerationDiagnostics.ErrorCode;
+            problem.Extensions["traceId"] = traceId;
+            return response;
         }
     }
 

@@ -162,6 +162,7 @@ describe('AI draft generation', () => {
           title: 'Draft generation failed',
           detail: 'Please try again later.',
           traceId: 'ai-trace',
+          code: 'DraftGenerationFailed',
           errors: { subject: ['Check subject'] },
         }),
       )
@@ -172,6 +173,7 @@ describe('AI draft generation', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Générer le brouillon' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('Please try again later.')
     expect(screen.getByRole('alert')).toHaveTextContent('ai-trace')
+    expect(screen.getByRole('alert')).toHaveTextContent('Code: DraftGenerationFailed')
     expect(screen.getByRole('alert')).toHaveTextContent('Check subject')
     expect(screen.getByLabelText('Sujet')).toHaveValue('Notre communauté')
     expect(saved).not.toHaveBeenCalled()

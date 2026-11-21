@@ -90,8 +90,20 @@ it('clears the current workspace immediately when access is revoked', async () =
   render(<WorkspaceShell email="alice@example.test" logout={vi.fn()} busy={false} />)
   await userEvent.click(await screen.findByRole('button', { name: 'Ouvrir Personnel Alice' }))
   await screen.findByText('Contenu : Personnel Alice')
-  fireEvent(window, new Event('workspace-access-lost'))
+  fireEvent(window, new CustomEvent('workspace-access-lost', { detail: { workspaceId: first.id } }))
   expect(await screen.findByRole('alert')).toHaveTextContent('Accès à cet espace refusé')
   expect(screen.queryByText('Contenu : Personnel Alice')).not.toBeInTheDocument()
   expect(workspaceRequest().id).toBeNull()
+  expect(screen.queryByRole('button', { name: 'Ouvrir Personnel Alice' })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Ouvrir Studio Alice' })).toBeInTheDocument()
+})
+
+it('starts without an active workspace on reload and does not trust the URL as a selection', async () => {
+  location.hash = 'posts'
+  setActiveWorkspace('previous')
+  render(<WorkspaceShell email="alice@example.test" logout={vi.fn()} busy={false} />)
+  await screen.findByRole('button', { name: 'Ouvrir Personnel Alice' })
+  expect(workspaceRequest().id).toBeNull()
+  expect(screen.getByLabelText('Espace actif')).toHaveValue('')
+  expect(workspacesApi.select).not.toHaveBeenCalled()
 })
