@@ -26,7 +26,25 @@ public sealed class VisualsController(PostVisualService visuals) : PostVisualAct
 [Authorize(Policy = "WorkspaceMember")]
 [TypeFilter(typeof(VisualApiExceptionFilter))]
 public sealed class WorkspaceVisualsController(PostVisualService visuals) : PostVisualActions(visuals)
-{ }
+{
+    [HttpPost("text-review"), Authorize(Policy = "WorkspaceEdit")]
+    [RequestSizeLimit(16384)]
+    public async Task<IActionResult> ReviewText(Guid postId, VisualTextOptions text, CancellationToken token) =>
+        Ok(await visuals.ReviewTextAsync(postId, text, token));
+
+    [HttpPost("{visualId:guid}/compose"), Authorize(Policy = "WorkspaceEdit")]
+    [RequestSizeLimit(16384)]
+    public async Task<IActionResult> Compose(Guid postId, Guid visualId, ComposeBrandRequest request, CancellationToken token)
+    {
+        var identity = await HttpContext.RequestServices.GetRequiredService<WorkspaceIdentityService>()
+            .ResolveApprovedAsync(request.LibraryId, request.Revision, token);
+        var result = await HttpContext.RequestServices.GetRequiredService<PostVisualService>().ComposeAsync(postId, visualId, identity, new(request.Mode, request.LogoContainsSlogan, request.Text, request.TextFingerprint, request.TextConfirmed, request.Layout),
+            HttpContext.RequestServices.GetRequiredService<IVisualBrandComposer>(), token);
+        return StatusCode(201, result);
+    }
+}
+public sealed record ComposeBrandRequest(Guid LibraryId, long Revision, string Mode, bool? LogoContainsSlogan = null,
+    VisualTextOptions? Text = null, string? TextFingerprint = null, bool TextConfirmed = false, string Layout = "Classic");
 
 public abstract class PostVisualActions(PostVisualService visuals) : ControllerBase
 {
@@ -63,7 +81,7 @@ public abstract class PostVisualActions(PostVisualService visuals) : ControllerB
         var identity = await ResolveIdentity(request, token);
         var concept = await visuals.PrepareAsync(postId, identity, request.VisualBrief, token);
         return Ok(new { concept.Subject, concept.Message, concept.Scene, concept.Brief, concept.Style, concept.Exclusions,
-            Warnings = concept.Terminology?.Warnings ?? Array.Empty<string>(), concept.Terminology,
+            Warnings = concept.Terminology?.Warnings ?? Array.Empty<string>(), concept.Terminology, concept.Text,
             IdentityName = identity.Name, IdentityStatus = identity.ApprovalId.HasValue ? "Approved" : "Temporary",
             identity.LibraryId, identity.Revision, identity.ApprovalId,
             ConceptToken = ConceptProtector.Protect(concept.Fingerprint, TimeSpan.FromMinutes(30)) });

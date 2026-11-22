@@ -41,7 +41,9 @@ export function WorkspaceEditorialAngles({ canManage }: { canManage: boolean }) 
     <h3>Angles éditoriaux de cet espace</h3>
     <p>Une intention pour une publication ; le profil permanent reste inchangé. Aucune sélection par défaut.</p>
     {error != null && <ErrorNotice error={error} />}
-    {canManage && loaded && !angles.length && <button type="button" disabled={busy} onClick={() => void save(true)}>Importer le catalogue initial configuré</button>}
+    {loaded && !angles.length && <p className="identity-empty">Aucun angle enregistré. La génération reste disponible sans angle.</p>}
+    {busy && <p role="status">Chargement des angles…</p>}
+    {canManage && loaded && !angles.length && <button type="button" className="button" disabled={busy} onClick={() => void save(true)}>Importer le catalogue initial configuré</button>}
     <label>Angle enregistré<select disabled={busy} value={selected?.id || ''} onChange={e => choose(angles.find(x => x.id === e.target.value))}>
       <option value="">Nouvel angle</option>
       {angles.map(x => <option key={x.id} value={x.id}>{x.name} · {x.active ? 'Actif' : 'Inactif'} · v{x.revision}</option>)}
@@ -54,7 +56,7 @@ export function WorkspaceEditorialAngles({ canManage }: { canManage: boolean }) 
       <label>Appel à l’action recommandé<textarea maxLength={4000} value={draft.callToAction} onChange={e => setDraft({ ...draft, callToAction: e.target.value })} /></label>
       <label>Angle actif<input type="checkbox" checked={draft.active} onChange={e => setDraft({ ...draft, active: e.target.checked })} /></label>
       <label>Ordre d’affichage<input type="number" min={0} max={10000} required value={draft.displayOrder} onChange={e => setDraft({ ...draft, displayOrder: Number(e.target.value) })} /></label>
-      {canManage && <button type="submit">Enregistrer l’angle</button>}
+      {canManage && <button type="submit" className="button primary">Enregistrer l’angle</button>}
     </fieldset></form>
     <p>Les modifications et désactivations concernent les prochaines générations. Les brouillons conservent les consignes utilisées dans leur audit.</p>
   </section>

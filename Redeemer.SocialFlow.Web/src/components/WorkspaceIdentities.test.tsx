@@ -73,3 +73,98 @@ it('shows neutral fallback and saves the profile with its revision', async () =>
   await screen.findByText(/Profil configuré · révision 1/)
   expect(JSON.parse(api.mock.calls[1][1]!.body as string)).toMatchObject({ revision: 0, organizationName: 'Organization B', tone: 'Warm' })
 })
+
+it('preselects only the active approved default on its exact current revision', async () => {
+  entries[0].approvalId = 'proof'
+  render(<Picker />)
+  await waitFor(() => expect(screen.getByRole('combobox')).toHaveValue('a'))
+  expect(screen.getByText(/Approuvée · espace workspace-a · révision 2/)).toBeInTheDocument()
+})
+it.each([401, 403, 500])('distinguishes API %s failures from a successful empty list', async status => {
+  vi.mocked(workspaceIdentitiesApi.list).mockRejectedValue(new posts.ApiError({ status, title: 'API indisponible' }))
+  render(<Picker />)
+  await screen.findByText('API indisponible')
+  expect(screen.queryByText(/Aucune révision graphique active/)).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Actualiser les identités' })).toBeEnabled()
+})
+it('does not report an empty catalog while loading', () => {
+  vi.mocked(workspaceIdentitiesApi.list).mockImplementation(() => new Promise(() => {}))
+  render(<Picker />)
+  expect(screen.getByText(/Chargement des identités graphiques approuvées/)).toBeInTheDocument()
+  expect(screen.queryByText(/Aucune révision graphique active/)).not.toBeInTheDocument()
+})
+it('refreshes after approval and selects the newly approved default', async () => {
+  render(<Picker />)
+  await screen.findByText(/Aucune révision graphique active/)
+  entries = [{ ...entry, approvalId: 'proof' }]
+  await userEvent.click(screen.getByRole('button', { name: 'Actualiser les identités' }))
+  await waitFor(() => expect(screen.getByRole('combobox')).toHaveValue('a'))
+})
+it('preserves explicit selection, deselection and temporary edits across refreshes', async () => {
+  entries = [{ ...entry, approvalId: 'a-proof' }, { ...entry, id: 'b', name: 'B', isDefault: false, approvalId: 'b-proof' }]
+  render(<Picker />)
+  await waitFor(() => expect(screen.getByRole('combobox')).toHaveValue('a'))
+  await userEvent.selectOptions(screen.getByRole('combobox'), 'b')
+  await userEvent.click(screen.getByRole('button', { name: 'Actualiser les identités' }))
+  await waitFor(() => expect(screen.getByRole('combobox')).toBeEnabled())
+  expect(screen.getByRole('combobox')).toHaveValue('b')
+  await userEvent.selectOptions(screen.getByRole('combobox'), '')
+  await userEvent.click(screen.getByRole('button', { name: 'Actualiser les identités' }))
+  await waitFor(() => expect(screen.getByRole('combobox')).toBeEnabled())
+  expect(screen.getByRole('combobox')).toHaveValue('')
+  await userEvent.click(screen.getByRole('checkbox'))
+  await userEvent.type(screen.getByLabelText('Nom de l’identité'), 'Brouillon temporaire')
+  await userEvent.click(screen.getByRole('button', { name: 'Actualiser les identités' }))
+  await waitFor(() => expect(screen.getByRole('combobox')).toBeEnabled())
+  expect(screen.getByLabelText('Nom de l’identité')).toHaveValue('Brouillon temporaire')
+})
+it('does not replace a temporary choice made before a slow initial load completes', async () => {
+  let finish!: (entries: LibraryIdentity[]) => void
+  vi.mocked(workspaceIdentitiesApi.list).mockImplementation(() => new Promise(resolve => { finish = resolve }))
+  render(<Picker />)
+  await userEvent.click(screen.getByRole('checkbox'))
+  await userEvent.type(screen.getByLabelText('Nom de l’identité'), 'Saisie en cours')
+  finish([{ ...entry, approvalId: 'proof' }])
+  await waitFor(() => expect(screen.getByRole('combobox')).toBeEnabled())
+  expect(screen.getByLabelText('Nom de l’identité')).toHaveValue('Saisie en cours')
+})
+it('keeps an obsolete selection as a warning rather than replacing its unsaved context', async () => {
+  entries[0].approvalId = 'proof'
+  render(<Picker />)
+  await waitFor(() => expect(screen.getByRole('combobox')).toHaveValue('a'))
+  entries = [{ ...entry, revision: 3, approvalId: null }]
+  await userEvent.click(screen.getByRole('button', { name: 'Actualiser les identités' }))
+  await screen.findByText(/La sélection précédente n’est plus/)
+  expect(screen.queryByText(/Approuvée · espace/)).not.toBeInTheDocument()
+  expect(screen.queryByRole('option', { name: /Organization A/ })).not.toBeInTheDocument()
+})
+it('ignores a late response from the previous workspace on remount', async () => {
+  let finish!: (entries: LibraryIdentity[]) => void
+  vi.mocked(workspaceIdentitiesApi.list).mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+    .mockResolvedValueOnce([{ ...entry, id: 'b', workspaceId: 'workspace-b', approvalId: 'b-proof' }])
+  const view = render(<Picker key="workspace-a" />)
+  view.rerender(<Picker key="workspace-b" />)
+  await waitFor(() => expect(screen.getByRole('combobox')).toHaveValue('b'))
+  finish([{ ...entry, approvalId: 'a-proof' }])
+  await waitFor(() => expect(screen.getByRole('combobox')).toHaveValue('b'))
+  expect(screen.getByText(/espace workspace-b/)).toBeInTheDocument()
+})
+
+it('offers several approved identities without choosing an arbitrary non-default', async () => {
+  entries = [{ ...entry, isDefault: false, approvalId: 'a-proof' }, { ...entry, id: 'b', name: 'B', isDefault: false, approvalId: 'b-proof' }]
+  render(<Picker />)
+  await screen.findByRole('option', { name: /Organization A/ })
+  expect(screen.getByRole('option', { name: /B · révision/ })).toBeInTheDocument()
+  expect(screen.getByRole('combobox')).toHaveValue('')
+})
+it('allows explicitly adopting a newly approved revision without silently updating the old choice', async () => {
+  entries[0].approvalId = 'proof'
+  render(<Picker />)
+  await waitFor(() => expect(screen.getByRole('combobox')).toHaveValue('a'))
+  entries = [{ ...entry, revision: 3, approvalId: 'proof-v3' }]
+  await userEvent.click(screen.getByRole('button', { name: 'Actualiser les identités' }))
+  await screen.findByText(/La sélection précédente n’est plus/)
+  expect(screen.getByRole('combobox')).toHaveValue('__previous')
+  await userEvent.selectOptions(screen.getByRole('combobox'), 'a')
+  expect(screen.getByText(/Approuvée · espace workspace-a · révision 3/)).toBeInTheDocument()
+})

@@ -1,5 +1,19 @@
 import { apiRequest } from './posts'
+export interface VisualTextOptions {
+  display: 'Illustration' | 'Title' | 'Messages'
+  title?: string
+  subtitle?: string
+  messages?: string[]
+  layout: 'Landscape' | 'Square'
+}
+export interface VisualTextReview {
+  canonicalCorrectionsRequired?: boolean
+  text: VisualTextOptions
+  fingerprint: string
+  terminology?: { warnings: string[] } | null
+}
 export interface VisualConcept {
+  text?: VisualTextOptions
   warnings?: string[]
   subject: string
   message: string
@@ -78,6 +92,13 @@ function createVisualsApi(workspace: boolean) {
     body.append('file', file)
     return request<Visual>(path(post) + '/upload', { method: 'POST', body, signal })
   },
+  reviewText: (post: string, text: VisualTextOptions, signal?: AbortSignal) =>
+    request<VisualTextReview>(path(post) + '/text-review', { method: 'POST', body: JSON.stringify(text), signal }),
+  compose: (post: string, id: string, libraryId: string, revision: number, mode: string, logoContainsSlogan: boolean | null, signal?: AbortSignal,
+    textValidation?: { text: VisualTextOptions; textFingerprint: string; textConfirmed: boolean }, layout = 'Classic') =>
+    request<Visual>(path(post) + '/' + encodeURIComponent(id) + '/compose', {
+      method: 'POST', body: JSON.stringify({ libraryId, revision, mode, logoContainsSlogan, layout, ...textValidation }), signal,
+    }),
   select: (post: string, id: string, signal?: AbortSignal) =>
     request<Visual>(path(post) + '/' + encodeURIComponent(id) + '/select', {
       method: 'POST',

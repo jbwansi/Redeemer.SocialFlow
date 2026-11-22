@@ -35,6 +35,10 @@ public sealed class SqlitePostVisualStore(DbContextOptions<SocialFlowDbContext> 
         await using var db = Db();
         await using var tx = await db.Database.BeginTransactionAsync(token);
         var post = await Post(db, postId, token);
+        if (visual.Generation?.Composition is { } composition &&
+            !await db.PostVisuals.AnyAsync(x => x.Id == composition.SourceVisualId && x.SocialPostId == postId &&
+                x.IsReady && !x.IsDeleted && x.Sha256 == composition.SourceSha256, token))
+            throw new DomainException("Composition source is unavailable or changed.");
         var entity = PostVisual.Create(post, visual.Origin, visual.Image.ContentType, visual.Image.Width,
             visual.Image.Height, visual.ByteLength, visual.Sha256,
             visual.Generation is null ? null : JsonSerializer.Serialize(visual.Generation), Clock.GetUtcNow());
@@ -43,6 +47,10 @@ public sealed class SqlitePostVisualStore(DbContextOptions<SocialFlowDbContext> 
             // Serialize against deletion/deactivation. The immutable effective settings stay in metadata.
             if (!await db.VisualIdentities.AnyAsync(x => x.Id == sourceId && !x.IsDeleted && x.IsActive, token))
                 throw new DomainException("Source identity is unavailable.");
+            if (visual.Generation?.Composition is not null &&
+                (!await db.VisualIdentities.AnyAsync(x => x.Id == sourceId && x.Revision == visual.Generation.EffectiveIdentity.Revision, token) ||
+                 !await db.VisualIdentityApprovals.AnyAsync(x => x.IdentityId == sourceId && x.Revision == visual.Generation.EffectiveIdentity.Revision && x.Id == visual.Generation.EffectiveIdentity.ApprovalId, token)))
+                throw new DomainException("Approved identity revision changed before composition was saved.");
             entity.SetSourceIdentity(sourceId);
         }
         db.PostVisuals.Add(entity);
@@ -105,6 +113,10 @@ public sealed class SqlitePostVisualStore(DbContextOptions<SocialFlowDbContext> 
         var post = await Post(db, postId, token);
         post.EnsureCanManageVisuals();
         if (post.SelectedVisualId == visualId) throw new DomainException("Select another visual before deleting this candidate.");
+        var candidateMetadata = await db.PostVisuals.Where(x => x.SocialPostId == postId && !x.IsDeleted && x.GenerationMetadataJson != null)
+            .Select(x => x.GenerationMetadataJson!).ToListAsync(token);
+        if (candidateMetadata.Any(json => JsonSerializer.Deserialize<VisualGenerationMetadata>(json)?.Composition?.SourceVisualId == visualId))
+            throw new DomainException("Remove composed candidates before deleting their source.");
         var visual = await Visual(db, postId, visualId, token);
         visual.Delete(Clock.GetUtcNow());
         await db.SaveChangesAsync(token);

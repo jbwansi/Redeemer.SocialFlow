@@ -1,5 +1,5 @@
 import { AlertCircle, X, Inbox } from 'lucide-react'
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useRef, useId, type ReactNode } from 'react'
 import { ApiError, platforms, statuses, type Platform, type Status } from '../api/posts'
 
 export function StatusBadge({ status }: { status: Status }) {
@@ -74,12 +74,15 @@ export function Modal({
   children,
   close,
   busy = false,
+  wide = false,
 }: {
   title: string
   children: ReactNode
   close: () => void
   busy?: boolean
+  wide?: boolean
 }) {
+  const titleId = useId()
   const ref = useRef<HTMLDialogElement>(null)
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null
@@ -93,17 +96,17 @@ export function Modal({
   return (
     <dialog
       ref={ref}
-      className="modal"
+      className={wide ? "modal modal-wide" : "modal"}
       onCancel={(event) => {
         event.preventDefault()
         if (!busy) close()
       }}
-      aria-labelledby="modal-title"
+      aria-labelledby={titleId}
     >
       <div className="modal-heading">
         <div>
           <span className="eyebrow">EDITORIAL WORKSPACE</span>
-          <h2 id="modal-title">{title}</h2>
+          <h2 id={titleId}>{title}</h2>
         </div>
         <button className="icon-button" aria-label="Close dialog" disabled={busy} onClick={close}>
           <X size={20} />

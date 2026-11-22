@@ -42,6 +42,36 @@ public sealed class PostVisualService(IPostVisualStore store, IVisualStorage sto
             { EffectiveIdentity = identity.Snapshot(), Terminology = concept.Terminology }, token);
     }
 
+    public async Task<VisualTextReview> ReviewTextAsync(Guid postId, VisualTextOptions text, CancellationToken token) =>
+        VisualTextValidation.Review(await store.EditablePostAsync(postId, token), text,
+            terminology is null ? null : await terminology.ReadAsync(token));
+
+    public async Task<VisualDto> ComposeAsync(Guid postId, Guid visualId, VisualIdentity identity,
+        BrandCompositionOptions options, IVisualBrandComposer composer, CancellationToken token)
+    {
+        var post = await store.EditablePostAsync(postId, token);
+        VisualTextReview? review = null;
+        if (options.Text is not null)
+        {
+            review = VisualTextValidation.Review(post, options.Text, terminology is null ? null : await terminology.ReadAsync(token));
+            if (!options.TextConfirmed || review.Fingerprint != options.TextFingerprint)
+                throw new BrandCompositionException("TextReviewRequired");
+            if (review.CanonicalCorrectionsRequired) throw new BrandCompositionException("TextCanonicalRequired");
+        }
+        var (source, _) = await store.GetAsync(postId, visualId, token);
+        if (source.Generation?.Composition is not null) throw new BrandCompositionException("AlreadyComposed");
+        var content = await ReadAsync(postId, visualId, token);
+        var result = await composer.ComposeAsync(content.Bytes, identity, options, token);
+        var metadata = new VisualGenerationMetadata("DeterministicComposition", options.Text is null ? "skia-banner-v2" : "skia-text-v1", identity.Id, post.Platform,
+            post.VisualBrief ?? "", "image/png", source.Width, source.Height, result.Bytes.Length, "Lossless", DateTimeOffset.UtcNow,
+            identity.Snapshot(), review?.Terminology ?? source.Generation?.Terminology,
+            new(source.Id, source.Sha256, result.LogoSha256, result.EffectiveMode, options.LogoContainsSlogan,
+                options.Text is null ? "skia-banner-v2" : "skia-text-v1", result.FontFamily, options.Text, review?.Fingerprint,
+                Convert.ToHexString(SHA256.HashData(result.Bytes)).ToLowerInvariant(), options.Layout));
+        var dimensions = await validator.ValidateAsync(result.Bytes, token);
+        return await SaveAsync(postId, result.Bytes, VisualOrigin.Generated, metadata with { Width = dimensions.Width, Height = dimensions.Height }, token);
+    }
+
     private async Task<VisualDto> SaveAsync(Guid postId, ReadOnlyMemory<byte> bytes, VisualOrigin origin,
         VisualGenerationMetadata? generation, CancellationToken token)
     {

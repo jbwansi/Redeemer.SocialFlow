@@ -8,9 +8,9 @@ namespace Redeemer.SocialFlow.Application.Visuals;
 
 // Version the recipe when its meaning changes. Catalogs are always resolved in the active workspace.
 public sealed record VisualConcept(string Subject, string Message, string Scene, string Brief,
-    string Style, string[] Exclusions, string Fingerprint, TerminologyEvidence? Terminology = null)
+    string Style, string[] Exclusions, string Fingerprint, TerminologyEvidence? Terminology = null, VisualTextOptions? Text = null)
 {
-    public const string Version = "editorial-concept-v3-terminology";
+    public const string Version = "editorial-concept-v4-text-free";
     public static VisualConcept Create(VisualPostContext post, VisualIdentity identity, string? suppliedBrief, TerminologyCatalog? catalog = null)
     {
         if (!post.Title.Any(char.IsLetterOrDigit) || !post.Content.Any(char.IsLetterOrDigit))
@@ -41,7 +41,9 @@ public sealed record VisualConcept(string Subject, string Message, string Scene,
             $"Illustration de « {title.Text} » ; représenter le message enregistré sans ajouter de faits. Le brief reste complémentaire.",
             request.VisualBrief, identity.Style,
             ["Aucun logo ou certification inventé", "Aucune affiliation ou réalisation non établie", "Aucun thème substitué par le brief",
-                "Une graphie exacte dans les pixels nécessite une composition textuelle déterministe ultérieure"], fingerprint, evidence);
+                "Illustration sans texte visible ; revue humaine nécessaire, aucune détection automatique garantie",
+                "Une graphie exacte dans les pixels nécessite une composition textuelle déterministe ultérieure"], fingerprint, evidence,
+            new("Title", post.Title));
     }
 }
 

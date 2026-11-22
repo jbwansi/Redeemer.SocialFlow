@@ -21,7 +21,7 @@ export function WorkspaceEditorialProfile({ canManage }: { canManage: boolean })
   }, [])
   return <section aria-label="Identité éditoriale">
     <h3>Identité éditoriale</h3>
-    <p>Espace : {workspace || 'chargement…'} · {value.revision ? `Profil configuré · révision ${value.revision}` : 'Profil absent : politique neutre, sans personnalisation'}</p>
+    <p>Espace : {workspace || 'chargement…'} · {!loaded ? 'Chargement du profil…' : value.revision ? `Profil configuré · révision ${value.revision}` : 'Profil absent : politique neutre, sans personnalisation'}</p>
     {error != null && <ErrorNotice error={error} />}
     <form onSubmit={async e => {
       e.preventDefault(); if (!loaded || !canManage || busy) return
@@ -34,7 +34,7 @@ export function WorkspaceEditorialProfile({ canManage }: { canManage: boolean })
           <textarea required={key === 'organizationName'} maxLength={key === 'organizationName' ? 200 : 4000} value={value[key] || ''}
             onChange={e => setValue({ ...value, [key]: e.target.value })} />
         </label>)}
-        {canManage && <button type="submit">Enregistrer le profil éditorial</button>}
+        {canManage && <button type="submit" className="button primary">Enregistrer le profil éditorial</button>}
       </fieldset>
     </form>
     <p>Les champs facultatifs vides ne seront pas inventés. Ce profil ne constitue pas une preuve de certification ou d’affiliation.</p>

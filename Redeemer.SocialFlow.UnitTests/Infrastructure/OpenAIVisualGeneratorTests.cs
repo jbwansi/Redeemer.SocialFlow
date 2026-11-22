@@ -84,6 +84,8 @@ public sealed class OpenAIVisualGeneratorTests
         Assert.Contains("#123456", prompt);
         Assert.Contains("Never create, recreate, imitate or invent a logo", prompt);
         Assert.DoesNotContain("Redeemer Holding", prompt);
+        Assert.DoesNotContain(Identity.Slogan!, prompt);
+        Assert.Contains("Do not render any brand name, slogan or lettering", prompt);
     }
 
     [Fact]

@@ -1,9 +1,10 @@
+import { VisualLightbox } from './VisualLightbox'
 import { WorkspaceIdentityPicker } from './WorkspaceIdentityPicker'
 import { VisualIdentityLibrary } from './VisualIdentityLibrary'
 import { emptyIdentity } from '../lib/visualIdentities'
 import { useEffect, useRef, useState } from 'react'
 import { ApiError, type Post } from '../api/posts'
-import { visualsApi, workspaceVisualsApi, type Visual, type VisualAvailability, type VisualConcept } from '../api/visuals'
+import { visualsApi, workspaceVisualsApi, type Visual, type VisualAvailability, type VisualConcept, type VisualTextOptions, type VisualTextReview } from '../api/visuals'
 import { ErrorNotice } from './shared'
 
 export function VisualPreview({ postId, visual, workspace = false }: { postId: string; visual: Visual; workspace?: boolean }) {
@@ -60,6 +61,20 @@ export function PostVisuals({
   onBusy?: (busy: boolean) => void
 }) {
   const api = workspace ? workspaceVisualsApi : visualsApi
+  const [expanded, setExpanded] = useState<string>()
+  const [brandMode, setBrandMode] = useState('None')
+  const [brandLayout, setBrandLayout] = useState('Compact')
+  const [logoSlogan, setLogoSlogan] = useState('')
+  const [textDisplay, setTextDisplay] = useState<VisualTextOptions['display']>('Illustration')
+  const [textTitle, setTextTitle] = useState(post.title)
+  const [textSubtitle, setTextSubtitle] = useState('')
+  const [textMessages, setTextMessages] = useState('')
+  const [textLayout, setTextLayout] = useState<VisualTextOptions['layout']>('Landscape')
+  const [textReview, setTextReview] = useState<VisualTextReview>()
+  const [textConfirmed, setTextConfirmed] = useState(false)
+  const hasText = textDisplay !== 'Illustration'
+  const textOptions: VisualTextOptions = { display: textDisplay, layout: textLayout,
+    ...(hasText ? { title: textTitle, subtitle: textSubtitle, messages: textDisplay === 'Messages' ? textMessages.split('\n') : [] } : {}) }
   const [available, setAvailable] = useState<boolean>()
   const [capabilities, setCapabilities] = useState<VisualAvailability>()
   const [loaded, setLoaded] = useState(false)
@@ -70,6 +85,14 @@ export function PostVisuals({
   const [notice, setNotice] = useState('')
   const [identityBusy, setIdentityBusy] = useState(false)
   const [identity, setIdentity] = useState(emptyIdentity)
+  useEffect(() => { setLogoSlogan('') }, [identity.libraryId, identity.revision])
+  useEffect(() => { setTextReview(undefined); setTextConfirmed(false) },
+    [textDisplay, textTitle, textSubtitle, textMessages, textLayout, post.id, post.updatedAt, post.title, post.content, unsaved, identity])
+  useEffect(() => {
+    setTextDisplay('Illustration'); setTextTitle(post.title); setTextSubtitle(''); setTextMessages('')
+    // Reset only when navigating to another post, never overwrite a draft during a save/refetch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [post.id])
   const [concept, setConcept] = useState<VisualConcept>()
   const [confirmed, setConfirmed] = useState(false)
   useEffect(() => {
@@ -93,6 +116,7 @@ export function PostVisuals({
     setCapabilities(undefined)
     setLoaded(false)
     setVisuals([])
+    setExpanded(undefined)
     void api
       .runtime(controller.signal)
       .then(async (runtime) => {
@@ -213,11 +237,62 @@ export function PostVisuals({
           <details>
             <summary>Identité visuelle pour la génération</summary>
             {workspace ? (
-              <WorkspaceIdentityPicker value={identity} onChange={setIdentity} />
+              <WorkspaceIdentityPicker value={identity} onChange={setIdentity} onBusy={setIdentityBusy} />
             ) : (
               <VisualIdentityLibrary value={identity} onChange={setIdentity} onBusy={setIdentityBusy} />
             )}
           </details>
+          {workspace && <section aria-label="Présentation de marque">
+            <label>Disposition de marque<select value={brandLayout} onChange={e => setBrandLayout(e.target.value)}>
+              <option value="Compact">Compacte — bandeau réduit</option><option value="Classic">Classique — logo à gauche et slogan à droite</option>
+              <option value="Overlay" disabled>Sans bandeau — zone sûre non garantie</option>
+            </select></label>
+            <div className={`brand-layout-preview ${brandLayout === 'Compact' ? 'compact' : 'classic'}`} role="img" aria-label={`Schéma de la disposition ${brandLayout === 'Compact' ? 'compacte' : 'classique'}`}>
+              <div>Illustration entière conservée</div><footer>{brandMode === 'None' ? 'Aucune marque ajoutée' : brandMode === 'Slogan' ? 'Slogan enregistré seul' : `Logo officiel${brandMode === 'LogoAndSlogan' && logoSlogan === 'no' ? ' + slogan séparé' : ' · sans slogan ajouté'}`}</footer>
+            </div>
+            <p>Sans bandeau indisponible : aucune zone libre ne peut être garantie sans masquer le contenu. Cet aperçu schématique ne déclenche aucun appel IA.</p>
+            <label>Présentation de marque<select value={brandMode} onChange={e => setBrandMode(e.target.value)}>
+              <option value="None">Aucune composition</option><option value="Logo">Logo officiel seul</option>
+              <option value="Slogan">Slogan enregistré seul</option><option value="LogoAndSlogan">Logo et slogan</option>
+            </select></label>
+            {brandMode === 'LogoAndSlogan' && <label>Le slogan figure-t-il déjà dans le logo officiel ?
+              <select value={logoSlogan} onChange={e => setLogoSlogan(e.target.value)}>
+                <option value="">À vérifier sur le fichier officiel</option><option value="yes">Oui — ne pas le répéter</option><option value="no">Non — ajouter le slogan enregistré</option>
+              </select></label>}
+            <p>Composition sans appel IA, sur un nouveau candidat. Le bandeau est ajouté sous l’image sans masquer son contenu. Seuls les éléments de l’identité approuvée sont utilisés. Vérifiez le logo avant de déclarer la présence du slogan.</p>
+          </section>}
+          {workspace && <section className="visual-text-panel" aria-label="Texte du visuel">
+            <h4>Texte du visuel</h4>
+            <label>Affichage du texte<select value={textDisplay} onChange={e => setTextDisplay(e.target.value as VisualTextOptions['display'])}>
+              <option value="Illustration">Illustration seule</option>
+              <option value="Title">Illustration avec titre</option>
+              <option value="Messages">Illustration avec titre et messages courts</option>
+            </select></label>
+            {hasText && <>
+              <label>Titre du visuel<textarea maxLength={240} value={textTitle} onChange={e => setTextTitle(e.target.value)} /></label>
+              <label>Sous-titre facultatif<textarea maxLength={400} value={textSubtitle} onChange={e => setTextSubtitle(e.target.value)} /></label>
+              {textDisplay === 'Messages' && <label>Messages courts (3 à 5, un par ligne)<textarea value={textMessages} onChange={e => setTextMessages(e.target.value)} maxLength={1004} /></label>}
+              <label>Disposition<select value={textLayout} onChange={e => setTextLayout(e.target.value as VisualTextOptions['layout'])}>
+                <option value="Landscape">Paysage — 1200 × 900</option><option value="Square">Carré — 1200 × 1200</option>
+              </select></label>
+              <p>Le titre est repris de la publication. Corrigez les textes, puis validez leur graphie et leur exactitude. Aucun fait, label ou certification n’est ajouté automatiquement.</p>
+              <button type="button" className="button" disabled={unsaved} onClick={() => {
+                setTextReview(undefined); setTextConfirmed(false)
+                void run('Vérification du texte sans appel IA…', async signal => {
+                  const result = await api.reviewText(post.id, textOptions, signal)
+                  if (!signal.aborted) setTextReview(result)
+                })
+              }}>Vérifier le texte (sans coût)</button>
+              {textReview && <div>
+                {!!textReview.terminology?.warnings.length && <div role="alert"><strong>Revue terminologique requise</strong>
+                  <ul>{textReview.terminology.warnings.map((warning, i) => <li key={i}>{warning}</li>)}</ul>
+                  <p>Corrigez les graphies recommandées. Vérifiez les ambiguïtés dans le contexte de votre publication.</p>
+                </div>}
+                <label><input type="checkbox" disabled={textReview.canonicalCorrectionsRequired} checked={textConfirmed} onChange={e => setTextConfirmed(e.target.checked)} />Je valide ces textes exacts et leur usage après revue du référentiel</label>
+              </div>}
+            </>}
+            <p>La composition est gratuite et crée un candidat à valider. L’illustration source reste intacte. La consigne « sans texte » donnée à l’IA ne garantit pas l’absence d’inscriptions : inspectez toujours l’image source.</p>
+          </section>}
           {unsaved && <p role="status">Enregistrez les modifications de la publication avant de préparer un concept.</p>}
           <button type="button" className="button" disabled={unsaved || !canGenerate || identity.isActive === false || (workspace && !identity.identityMode)} onClick={prepare}>
             Préparer le concept (sans coût)
@@ -307,13 +382,17 @@ export function PostVisuals({
           {readOnly ? 'Aucun visuel sélectionné.' : 'Aucun visuel pour cette publication.'}
         </p>
       )}
+      {expanded && candidates.some(v => v.id === expanded) && <VisualLightbox key={post.id} postId={post.id} visuals={candidates} initialId={expanded} workspace={workspace} close={() => setExpanded(undefined)} />}
       <div className="visual-grid">
         {candidates.map((visual) => (
           <article className="visual-card" key={visual.id}>
-            <VisualPreview postId={post.id} visual={visual} workspace={workspace} />
+            <button type="button" className="visual-enlarge" aria-label="Agrandir le visuel" onClick={() => setExpanded(visual.id)}>
+              <VisualPreview postId={post.id} visual={visual} workspace={workspace} />
+              <span>Agrandir</span>
+            </button>
             <p>
               {visual.selected ? 'Sélectionné et validé' : 'Candidat'} ·{' '}
-              {visual.origin === 1 ? 'Généré' : 'Importé'}
+              {visual.generation?.composition ? 'Visuel composé' : visual.origin === 1 ? 'Illustration source générée' : 'Illustration source importée'}
             </p>
             <small>
               {visual.width} × {visual.height} · {Math.ceil(visual.byteLength / 1024)} Kio ·{' '}
@@ -321,6 +400,14 @@ export function PostVisuals({
             </small>
             {!readOnly && (
               <div className="visual-actions">
+                {workspace && <button type="button" className="button" disabled={!editable || locked || unsaved || (brandMode === 'None' && !hasText) || (hasText && (!textReview || !textConfirmed)) || identity.identityMode !== 'Approved' || !identity.libraryId || !!visual.generation?.composition || (brandMode === 'LogoAndSlogan' && !logoSlogan)}
+                  onClick={() => void run('Composition sans appel IA…', async signal => {
+                    const args = [post.id, visual.id, identity.libraryId!, identity.revision!, brandMode, logoSlogan === '' ? null : logoSlogan === 'yes', signal] as const
+                    const result = hasText
+                      ? await api.compose(...args, { text: textOptions, textFingerprint: textReview!.fingerprint, textConfirmed }, brandLayout)
+                      : await api.compose(...args, undefined, brandLayout)
+                    if (!signal.aborted) setExpanded(result.id)
+                  })}>{hasText ? 'Composer un aperçu avec texte et marque' : 'Composer un aperçu de marque'}</button>}
                 <button
                   type="button"
                   className="button"

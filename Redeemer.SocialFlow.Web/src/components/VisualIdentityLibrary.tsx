@@ -153,11 +153,12 @@ export function VisualIdentityLibrary({
       {notice && <p role="status">{notice}</p>}
       {workspace && <p>Identités de cet espace. Enregistrer ne signifie pas approuver.</p>}
       {selected && <p role="status">{selected.name} · révision {selected.revision} · {selected.isActive ? 'Active' : 'Inactive'} · {selected.approvalId ? 'Approuvée' : 'Enregistrée, non approuvée'}</p>}
-      {workspace && selected && canManage && <button type="button" disabled={busy || !selected.isActive || !!selected.approvalId || JSON.stringify(value) !== JSON.stringify(effectiveIdentity(selected))} onClick={() => void run(async signal => {
+      {workspace && selected && canManage && <button type="button" className="button primary" disabled={busy || !selected.isActive || !!selected.approvalId || JSON.stringify(value) !== JSON.stringify(effectiveIdentity(selected))} onClick={() => void run(async signal => {
         await api.approve(selected.id, selected.revision, signal)
         return (await api.list(signal)).find(x => x.id === selected.id)
       })}>Approuver cette révision enregistrée</button>}
       {busy && <p role="status">Chargement de la bibliothèque…</p>}
+      {!busy && error == null && !entries.length && <p className="identity-empty">Aucune identité visuelle enregistrée dans cette bibliothèque.</p>}
       <fieldset disabled={busy}>
         <label>
           Identité de la bibliothèque
@@ -187,7 +188,7 @@ export function VisualIdentityLibrary({
         <fieldset disabled={!canManage}>
         <VisualIdentityEditor value={value} onChange={onChange} localLibrary={false} />
         <div className="visual-actions">
-          <button type="button" className="button" onClick={save}>
+          <button type="button" className="button primary" onClick={save}>
             {selected ? 'Enregistrer les modifications de l’identité' : 'Créer cette identité'}
           </button>
           <button type="button" className="button" onClick={() => onChange(emptyIdentity())}>
@@ -323,6 +324,7 @@ export function VisualIdentityLibrary({
             <p className="field-note">
               Le fichier original est conservé. Le logo n’est ni généré ni ajouté automatiquement
               aux visuels.
+              {workspace && <> Dans une publication, choisissez une présentation de marque puis « Composer un aperçu de marque » sur un candidat.</>}
             </p>
           </>
         )}

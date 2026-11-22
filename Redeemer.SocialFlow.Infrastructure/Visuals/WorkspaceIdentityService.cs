@@ -58,6 +58,12 @@ public sealed class WorkspaceIdentityService(SocialFlowDbContext db) : IWorkspac
         if (!source.IsActive || source.Revision != revision) throw new DomainException("Identity inactive or revision obsolete.");
         return source;
     }
+    public async Task<VisualIdentity> ResolveApprovedAsync(Guid id, long revision, CancellationToken token)
+    {
+        var source = await Source(id, revision, token);
+        var approval = await ApprovalAsync(id, revision, token) ?? throw new DomainException("This identity revision is not approved.");
+        return Canonical(source, approval);
+    }
     public async Task<VisualIdentity> ResolveApprovedAsync(Guid id, long revision, VisualIdentity supplied, CancellationToken token)
     {
         var source = await Source(id, revision, token);

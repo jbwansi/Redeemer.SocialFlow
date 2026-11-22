@@ -46,6 +46,8 @@ export function WorkspaceTerminology({ canManage }: { canManage: boolean }) {
     <h3>Référentiel terminologique de cet espace</h3>
     <p>La validation confirme une graphie et sa source dans cet espace, sans établir d’affiliation ni de certification. Les termes absents restent non vérifiés.</p>
     {error != null && <ErrorNotice error={error} />}
+    {busy && <p role="status">Chargement du référentiel…</p>}
+    {!busy && error == null && !terms.length && <p className="identity-empty">Aucun terme enregistré. Ajoutez une appellation et sa source avant de la valider.</p>}
     <label>Terme enregistré<select disabled={busy} value={selected?.id || ''} onChange={e => choose(terms.find(x => x.id === e.target.value))}>
       <option value="">Nouveau terme</option>
       {terms.map(t => <option key={t.id} value={t.id}>{t.canonical} · {statuses[t.status - 1]} · v{t.revision}</option>)}
@@ -63,10 +65,10 @@ export function WorkspaceTerminology({ canManage }: { canManage: boolean }) {
         <label>Contexte d’utilisation<input maxLength={300} value={draft.usageContext} onChange={e => setDraft({ ...draft, usageContext: e.target.value })} /></label>
         <label>Définition ou note d’usage<textarea maxLength={1000} value={draft.note} onChange={e => setDraft({ ...draft, note: e.target.value })} /></label>
         <label>Source de référence<input maxLength={1000} value={draft.source} onChange={e => setDraft({ ...draft, source: e.target.value })} /></label>
-        {canManage && <button type="submit">Enregistrer comme proposé</button>}
+        {canManage && <button type="submit" className="button primary">Enregistrer comme proposé</button>}
         {canManage && selected && <>
-          <button type="button" disabled={!!changed || selected.status !== 1 || !selected.source?.trim()} onClick={() => void write('validate')}>Valider la graphie et la source enregistrées</button>
-          <button type="button" disabled={!!changed || selected.status === 3} onClick={() => void write('retire')}>Retirer ce terme</button>
+          <button type="button" className="button" disabled={!!changed || selected.status !== 1 || !selected.source?.trim()} onClick={() => void write('validate')}>Valider la graphie et la source enregistrées</button>
+          <button type="button" className="button" disabled={!!changed || selected.status === 3} onClick={() => void write('retire')}>Retirer ce terme</button>
         </>}
       </fieldset>
     </form>
