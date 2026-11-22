@@ -15,6 +15,7 @@ public sealed class VisualApiExceptionFilter : IExceptionFilter
     {
         var (status, title) = context.Exception switch
         {
+            EditorialAngleUnavailableException => (404, "Angle introuvable dans cet espace."),
             Infrastructure.Terminology.TermNotFoundException => (404, "Terme introuvable dans cet espace."),
             VisualConceptException { Code: "EditorialContextRequired" } => (400, "Enregistrez un titre et un contenu éditorial avant de préparer le concept."),
             VisualConceptException => (409, "Enregistrez vos modifications, puis préparez et validez à nouveau le concept visuel."),

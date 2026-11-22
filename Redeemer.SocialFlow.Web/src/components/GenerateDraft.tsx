@@ -7,6 +7,7 @@ import {
   type GeneratedDraftSuccess,
   type KnowledgePassage,
 } from '../api/posts'
+import type { EditorialAngle } from './WorkspaceEditorialAngles'
 import { ErrorNotice, Modal } from './shared'
 
 export function GenerateDraft({
@@ -18,6 +19,18 @@ export function GenerateDraft({
   saved: (result: GeneratedDraftSuccess) => void
   workspace?: boolean
 }) {
+  const [angles, setAngles] = useState<EditorialAngle[]>([])
+  const [angleId, setAngleId] = useState('')
+  const [angleError, setAngleError] = useState(false)
+  useEffect(() => {
+    if (!workspace) return
+    const controller = new AbortController()
+    setAngles([]); setAngleId(''); setAngleError(false)
+    void apiRequest<EditorialAngle[]>('/workspace-editorial-angles?activeOnly=true', { signal: controller.signal }).then(x => {
+      if (!controller.signal.aborted) setAngles(x)
+    }).catch(() => { if (!controller.signal.aborted) setAngleError(true) })
+    return () => controller.abort()
+  }, [workspace])
   const [subject, setSubject] = useState('')
   const [objective, setObjective] = useState('')
   const [audience, setAudience] = useState('')
@@ -47,7 +60,7 @@ export function GenerateDraft({
     setError(undefined)
     setMessage('')
     try {
-      const result = await postsApi.generateDraft({ subject, objective, audience, platform, mode, ...(context.trim() ? { context: context.trim() } : {}) })
+      const result = await postsApi.generateDraft({ subject, objective, audience, platform, mode, ...(workspace && angleId ? { editorialAngleId: angleId } : {}), ...(context.trim() ? { context: context.trim() } : {}) })
       if (result.outcome === 1) saved(result)
       else
         setMessage(
@@ -77,6 +90,14 @@ export function GenerateDraft({
           </p>
         )}
         <fieldset disabled={busy}>
+          {workspace && <>
+            <label>Angle éditorial (facultatif)<select value={angleId} onChange={e => setAngleId(e.target.value)}>
+              <option value="">Sans angle</option>
+              {angles.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
+            </select></label>
+            {angleId && <p>{angles.find(x => x.id === angleId)?.description}</p>}
+            {angleError && <p role="status">Angles indisponibles. Vous pouvez continuer sans angle.</p>}
+          </>}
           <label>
             Mode de génération
             <select

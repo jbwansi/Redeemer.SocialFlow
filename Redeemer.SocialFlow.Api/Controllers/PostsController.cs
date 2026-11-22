@@ -35,7 +35,7 @@ public sealed class PostsController(ISocialPostService posts) : ControllerBase
             // Resolve here so configuration failures receive the same safe response as generation failures.
             var useCase = HttpContext.RequestServices.GetRequiredService<IGenerateSocialPostDraft>();
             var result = await useCase.ExecuteAsync(new GenerateContentRequest(
-                request.Subject, request.Objective, request.Audience, request.Platform!.Value) { Context = request.Context?.Trim() }, request.Mode!.Value, cancellationToken);
+                request.Subject, request.Objective, request.Audience, request.Platform!.Value) { Context = request.Context?.Trim(), EditorialAngleId = request.EditorialAngleId }, request.Mode!.Value, cancellationToken);
             if (result.Outcome != SocialPostDraftOutcome.Created)
                 return Ok(result);
             return CreatedAtAction(nameof(GetById), new { id = result.PostId }, result);
@@ -43,6 +43,13 @@ public sealed class PostsController(ISocialPostService posts) : ControllerBase
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             return StatusCode(StatusCodes.Status499ClientClosedRequest);
+        }
+        catch (EditorialAngleUnavailableException)
+        {
+            var response = Problem(statusCode: 409, title: "Angle éditorial indisponible",
+                detail: "Choisissez un angle actif de cet espace ou continuez sans angle.");
+            ((ProblemDetails)response.Value!).Extensions["code"] = "EditorialAngleUnavailable";
+            return response;
         }
         catch (Exception error)
         {

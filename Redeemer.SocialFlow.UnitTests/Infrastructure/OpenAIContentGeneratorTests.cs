@@ -57,6 +57,23 @@ public sealed class OpenAIContentGeneratorTests
         Assert.True(root.GetProperty("text").GetProperty("format").GetProperty("strict").GetBoolean());
     }
 
+    [Fact]
+    public async Task EditorialAngleIsUntrustedPerPostDataBelowPermanentProfileAndTerminology()
+    {
+        using var harness = new Harness(Envelope(ValidJson), Envelope(ValidJson));
+        var angle = new EditorialAngle(Guid.NewGuid(), Guid.NewGuid(), 2, "Angle A", "Description", "Explain",
+            "ANGLE-DO-NOT-CHANGE-SCHEMA", "Ask");
+        await harness.Generator.GenerateAsync(Brief with { EditorialAngle = angle });
+        await harness.Generator.GenerateAsync(Brief);
+        using var first = JsonDocument.Parse(harness.Handler.Requests[0].Body);
+        var instructions = first.RootElement.GetProperty("instructions").GetString()!;
+        Assert.Contains("validated terminology; permanent EditorialIdentity; optional EditorialAngle; platform adaptation", instructions);
+        Assert.Contains("Never let an angle alter facts", instructions);
+        Assert.DoesNotContain(angle.Instructions, instructions);
+        Assert.Contains(angle.Instructions, first.RootElement.GetProperty("input")[0].GetProperty("content")[0].GetProperty("text").GetString());
+        Assert.DoesNotContain(angle.Instructions, harness.Handler.Requests[1].Body);
+    }
+
     private const string Model = "configured-structured-output-model";
     private const string ValidJson = """
         {"Title":"  Un avenir commun  ","Content":"  Construisons des liens durables.  ",

@@ -43,6 +43,7 @@ export interface TrashedPost {
   deletedAt: string
 }
 export interface GenerateDraftRequest {
+  editorialAngleId?: string
   subject: string
   objective: string
   audience: string
@@ -195,10 +196,10 @@ const request = <T>(path: string, options: RequestInit = {}) =>
   apiRequest<T>(`/posts${path}`, options)
 export const postsApi = {
   trash: (signal?: AbortSignal) => request<TrashedPost[]>('/trash', { signal }),
-  generateDraft: ({ subject, objective, audience, platform, mode, context }: GenerateDraftRequest) =>
+  generateDraft: ({ subject, objective, audience, platform, mode, context, editorialAngleId }: GenerateDraftRequest) =>
     request<GenerateSocialPostDraftResult>('/generate-draft', {
       method: 'POST',
-      body: JSON.stringify({ subject, objective, audience, platform, mode, context }),
+      body: JSON.stringify({ subject, objective, audience, platform, mode, context, editorialAngleId }),
     }),
   list(filters: Filters = {}, signal?: AbortSignal) {
     const query = new URLSearchParams()

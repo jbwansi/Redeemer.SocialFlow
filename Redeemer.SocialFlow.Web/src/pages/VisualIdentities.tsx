@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { visualsApi, workspaceVisualsApi } from '../api/visuals'
 import { WorkspaceEditorialProfile } from '../components/WorkspaceEditorialProfile'
+import { WorkspaceEditorialAngles } from '../components/WorkspaceEditorialAngles'
 import { WorkspaceTerminology } from '../components/WorkspaceTerminology'
 import { ApiError } from '../api/posts'
 import { emptyIdentity } from '../lib/visualIdentities'
@@ -25,14 +26,15 @@ export function VisualIdentities({ workspace = false, canManage = true }: { work
       })
     return () => controller.abort()
   }, [workspace])
-  if (error) return <ErrorNotice error={error} />
-  if (enabled === undefined) return <p role="status">Chargement…</p>
-  if (!enabled) return <>{workspace && <><WorkspaceEditorialProfile canManage={canManage} /><WorkspaceTerminology canManage={canManage} /></>}<p>Gestion des visuels désactivée sur ce poste.</p></>
   return (
     <div className="visual-manager">
       {workspace && <WorkspaceEditorialProfile canManage={canManage} />}
       {workspace && <WorkspaceTerminology canManage={canManage} />}
-      <VisualIdentityLibrary value={identity} onChange={setIdentity} workspace={workspace} canManage={canManage} />
+      {workspace && <WorkspaceEditorialAngles canManage={canManage} />}
+      {error ? <ErrorNotice error={error} />
+        : enabled === undefined ? <p role="status">Chargement des identités graphiques…</p>
+          : !enabled ? <p>Gestion des visuels désactivée sur ce poste.</p>
+            : <VisualIdentityLibrary value={identity} onChange={setIdentity} workspace={workspace} canManage={canManage} />}
     </div>
   )
 }

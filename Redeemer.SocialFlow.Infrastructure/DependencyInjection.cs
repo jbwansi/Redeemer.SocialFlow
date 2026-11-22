@@ -19,6 +19,8 @@ public static class DependencyInjection
         services.AddScoped<IKnowledgeDbContext>(provider => provider.GetRequiredService<SocialFlowDbContext>());
         services.AddScoped<IKnowledgePassageSearch, SqliteKnowledgePassageSearch>();
         services.AddScoped<IPublicationOperationStore, SqlitePublicationOperationStore>();
+        services.AddScoped<Editorial.WorkspaceEditorialAngleService>();
+        services.AddScoped<Application.AI.IWorkspaceEditorialAngleReader>(p => p.GetRequiredService<Editorial.WorkspaceEditorialAngleService>());
         services.AddScoped<Visuals.WorkspaceIdentityService>();
         services.AddScoped<Terminology.WorkspaceTerminologyService>();
         services.AddScoped<Application.Terminology.ITerminologyReader>(p => p.GetRequiredService<Terminology.WorkspaceTerminologyService>());

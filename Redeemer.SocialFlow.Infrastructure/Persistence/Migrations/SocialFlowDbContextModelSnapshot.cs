@@ -26,6 +26,9 @@ namespace Redeemer.SocialFlow.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("EditorialAngleJson")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTimeOffset>("GeneratedAt")
                         .HasColumnType("TEXT");
 
@@ -775,6 +778,62 @@ namespace Redeemer.SocialFlow.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Redeemer.SocialFlow.Domain.Entities.WorkspaceEditorialAngle", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Active")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("CallToAction")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Instructions")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Objective")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UpdatedBy")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .IsConcurrencyToken()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WorkspaceId");
+
+                    b.HasIndex("WorkspaceId", "Active", "DisplayOrder");
+
+                    b.ToTable("WorkspaceEditorialAngles");
+                });
+
             modelBuilder.Entity("Redeemer.SocialFlow.Domain.Entities.WorkspaceEditorialProfile", b =>
                 {
                     b.Property<Guid>("WorkspaceId")
@@ -1227,6 +1286,15 @@ namespace Redeemer.SocialFlow.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("WorkspaceId", "IdentityId")
                         .HasPrincipalKey("WorkspaceId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Redeemer.SocialFlow.Domain.Entities.WorkspaceEditorialAngle", b =>
+                {
+                    b.HasOne("Redeemer.SocialFlow.Domain.Entities.Workspace", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

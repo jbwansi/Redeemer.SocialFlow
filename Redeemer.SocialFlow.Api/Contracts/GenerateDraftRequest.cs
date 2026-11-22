@@ -10,4 +10,4 @@ public sealed record GenerateDraftRequest(
     [Required] string Audience,
     [Required, EnumDataType(typeof(SocialPlatform))] SocialPlatform? Platform,
     [Required, EnumDataType(typeof(SocialPostGenerationMode))] SocialPostGenerationMode? Mode,
-    [StringLength(4000)] string? Context = null);
+    [StringLength(4000)] string? Context = null, Guid? EditorialAngleId = null);

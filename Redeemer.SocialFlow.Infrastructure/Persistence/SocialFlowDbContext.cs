@@ -9,6 +9,7 @@ public sealed class SocialFlowDbContext(DbContextOptions<SocialFlowDbContext> op
     : DbContext(options), ISocialFlowDbContext, IKnowledgeDbContext
 {
     public Guid? ActiveWorkspaceId => workspace?.WorkspaceId;
+    public DbSet<WorkspaceEditorialAngle> WorkspaceEditorialAngles => Set<WorkspaceEditorialAngle>();
     public DbSet<Workspace> Workspaces => Set<Workspace>();
     public DbSet<WorkspaceTerm> WorkspaceTerms => Set<WorkspaceTerm>();
     public DbSet<WorkspaceTermRevision> WorkspaceTermRevisions => Set<WorkspaceTermRevision>();
@@ -34,6 +35,7 @@ public sealed class SocialFlowDbContext(DbContextOptions<SocialFlowDbContext> op
         base.OnModelCreating(modelBuilder);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(SocialFlowDbContext).Assembly);
         Tenant<SocialPost>(modelBuilder);
+        Tenant<WorkspaceEditorialAngle>(modelBuilder);
         Tenant<WorkspaceTerm>(modelBuilder);
         Tenant<WorkspaceTermRevision>(modelBuilder);
         Tenant<WorkspaceEditorialProfile>(modelBuilder);

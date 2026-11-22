@@ -9,7 +9,7 @@ namespace Redeemer.SocialFlow.Application.SocialPosts;
 
 public sealed class GenerateSocialPostDraft(IContentGenerator generator, ISocialFlowDbContext context,
     IGenerateGroundedContent groundedGenerator, DraftGenerationProgress? progress = null,
-    IWorkspaceEditorialProfileReader? editorialProfiles = null, ITerminologyReader? terminology = null)
+    IWorkspaceEditorialProfileReader? editorialProfiles = null, ITerminologyReader? terminology = null, IWorkspaceEditorialAngleReader? angles = null)
     : IGenerateSocialPostDraft
 {
     public async Task<GenerateSocialPostDraftResult> ExecuteAsync(
@@ -23,6 +23,9 @@ public sealed class GenerateSocialPostDraft(IContentGenerator generator, ISocial
         cancellationToken.ThrowIfCancellationRequested();
         if (!Enum.IsDefined(mode)) throw new ArgumentException("Invalid generation mode.", nameof(mode));
         ContentGenerationResult generation;
+        var angle = request.EditorialAngleId is Guid angleId
+            ? await (angles ?? throw new EditorialAngleUnavailableException()).ResolveAsync(angleId, cancellationToken) : null;
+        request = request with { EditorialAngle = angle };
         // Always resolve tenant identity on the server, never accept a caller's identity.
         request = request with { EditorialIdentity = editorialProfiles is null ? null : await editorialProfiles.ReadAsync(cancellationToken) };
         var catalog = terminology is null ? null : await terminology.ReadAsync(cancellationToken);
@@ -50,6 +53,7 @@ public sealed class GenerateSocialPostDraft(IContentGenerator generator, ISocial
             generation = await generator.GenerateAsync(request, cancellationToken);
         }
         if (progress is not null) progress.Stage = DraftGenerationStage.ResponseValidation;
+        generation = generation with { Metadata = generation.Metadata with { EditorialAngle = angle } };
         var generated = generation.Content;
         if (catalog is not null && catalog.Terms.Count > 0)
         {
@@ -73,6 +77,7 @@ public sealed class GenerateSocialPostDraft(IContentGenerator generator, ISocial
         post.Update(generated.Title, generated.Content, generated.CallToAction, generated.VisualBrief);
         var audit = AiGeneration.Create(post.Id, request.Subject, request.Objective, request.Audience,
             request.Platform, generation.Metadata.Provider, generation.Metadata.Model, generated.Warnings);
+        if (angle is not null) audit.RecordEditorialAngle(JsonSerializer.Serialize(angle));
         if (generation.Metadata.Terminology is not null)
             audit.RecordTerminology(JsonSerializer.Serialize(generation.Metadata.Terminology));
         if (progress is not null) progress.Stage = DraftGenerationStage.Persistence;

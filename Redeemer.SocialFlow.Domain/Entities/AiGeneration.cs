@@ -18,6 +18,8 @@ public sealed class AiGeneration : IWorkspaceResource
     public string Model { get; private set; } = string.Empty;
     public IReadOnlyList<string> Warnings { get; private set; } = Array.Empty<string>();
     public DateTimeOffset GeneratedAt { get; private set; }
+    public string? EditorialAngleJson { get; private set; }
+    public void RecordEditorialAngle(string json) => EditorialAngleJson = json;
     public string? TerminologyEvidenceJson { get; private set; }
     public void RecordTerminology(string json) => TerminologyEvidenceJson = json;
 
