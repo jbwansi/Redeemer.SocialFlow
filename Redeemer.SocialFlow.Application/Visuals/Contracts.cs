@@ -21,7 +21,8 @@ public sealed class VisualLimits
     public int MaxDimension { get; set; } = 8192;
     public long MaxPixels { get; set; } = 36_000_000;
 }
-public sealed record VisualPostContext(Guid Id, SocialPlatform Platform, string? VisualBrief);
+public sealed record VisualPostContext(Guid Id, SocialPlatform Platform, string? VisualBrief,
+    string Title = "", string Content = "", Guid WorkspaceId = default, DateTimeOffset UpdatedAt = default);
 public sealed record VisualDto(Guid Id, Guid SocialPostId, VisualOrigin Origin, string ContentType,
     int Width, int Height, long ByteLength, string Sha256, DateTimeOffset CreatedAt,
     DateTimeOffset? ValidatedAt, bool Selected, VisualGenerationMetadata? Generation);

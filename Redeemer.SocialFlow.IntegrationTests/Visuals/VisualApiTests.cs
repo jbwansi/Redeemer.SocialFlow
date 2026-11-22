@@ -67,6 +67,15 @@ public sealed class VisualApiTests : IAsyncLifetime
         response.EnsureSuccessStatusCode();
         return (await response.Content.ReadFromJsonAsync<SocialPostDto>())!.Id;
     }
+    private async Task<HttpResponseMessage> Generate(Guid post, object input)
+    {
+        var prepared = await _client.PostAsJsonAsync(Route(post) + "/concept", input);
+        if (!prepared.IsSuccessStatusCode) return prepared;
+        var concept = await prepared.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        var payload = System.Text.Json.JsonSerializer.SerializeToNode(input)!.AsObject();
+        payload["conceptToken"] = concept.GetProperty("conceptToken").GetString();
+        return await _client.PostAsJsonAsync(Route(post) + "/generate", payload);
+    }
     private static string Route(Guid post) => $"/api/posts/{post}/visuals";
     private static MultipartFormDataContent UploadBody()
     {
@@ -97,8 +106,8 @@ public sealed class VisualApiTests : IAsyncLifetime
         Assert.True((await select.Content.ReadFromJsonAsync<VisualDto>())!.Selected);
         using var deniedDelete = await _client.DeleteAsync(Route(post)+$"/{visual.Id}");
         Assert.Equal(HttpStatusCode.Conflict,deniedDelete.StatusCode);
-        using var generation = await _client.PostAsJsonAsync(Route(post)+"/generate",
-            new { IdentityId="brand",Name="Brand",Style="Simple",Colors=new[]{"#123456"},VisualBrief="Garden" });
+        using var generation = await Generate(post,
+            new { IdentityId="brand",Name="Brand",Style="Simple",Colors=new[]{"#123456"},VisualBrief="" });
         Assert.Equal(HttpStatusCode.Created,generation.StatusCode);
         var candidate = (await generation.Content.ReadFromJsonAsync<VisualDto>())!;
         Assert.Equal(1,_generator.Calls);
@@ -226,8 +235,8 @@ public sealed class VisualApiTests : IAsyncLifetime
     {
         var post=await Post();
         _generator.Fail=true;
-        using var response=await _client.PostAsJsonAsync(Route(post)+"/generate",
-            new {IdentityId="brand",Name="Brand",Style="Simple",Colors=new[]{"#123456"},VisualBrief="Garden"});
+        using var response=await Generate(post,
+            new {IdentityId="brand",Name="Brand",Style="Simple",Colors=new[]{"#123456"},VisualBrief=""});
         Assert.Equal(HttpStatusCode.InternalServerError,response.StatusCode);
         Assert.DoesNotContain("secret",await response.Content.ReadAsStringAsync());
     }
@@ -257,8 +266,8 @@ public sealed class VisualApiTests : IAsyncLifetime
         image.EnsureSuccessStatusCode(); Assert.True(image.Headers.CacheControl!.NoStore);
         Assert.Equal(Image(), await image.Content.ReadAsByteArrayAsync());
         var post = await Post();
-        using var generated = await _client.PostAsJsonAsync(Route(post)+"/generate", new {
-            identity.IdentityId, Name="Temporary", Style="Flat", Colors=new[]{"#123456"}, VisualBrief="Garden",
+        using var generated = await Generate(post, new {
+            identity.IdentityId, Name="Temporary", Style="Flat", Colors=new[]{"#123456"}, VisualBrief="",
             LibraryId=identity.Id, identity.Revision, Instructions="Temporary instruction" });
         generated.EnsureSuccessStatusCode();
         var visual = (await generated.Content.ReadFromJsonAsync<VisualDto>())!;
@@ -268,8 +277,8 @@ public sealed class VisualApiTests : IAsyncLifetime
         using var deleted = await _client.SendAsync(new HttpRequestMessage(HttpMethod.Delete,$"/api/visual-identities/{identity.Id}") {
             Content=JsonContent.Create(new { identity.Revision }) });
         Assert.Equal(HttpStatusCode.Conflict, deleted.StatusCode);
-        using var stale = await _client.PostAsJsonAsync(Route(post)+"/generate", new {
-            identity.IdentityId, identity.Name, identity.Style, identity.Colors, VisualBrief="Garden",
+        using var stale = await Generate(post, new {
+            identity.IdentityId, identity.Name, identity.Style, identity.Colors, VisualBrief="",
             LibraryId=identity.Id, Revision=0 });
         Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode); Assert.Equal(1,_generator.Calls);
     }

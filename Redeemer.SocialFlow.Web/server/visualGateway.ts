@@ -6,7 +6,7 @@ import type { Plugin } from 'vite'
 const prefix = '/local-visuals'
 const guid = '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'
 const route = new RegExp(
-  '^/posts/(' + guid + ')/visuals(?:/(upload|generate|' + guid + ')(/select)?)?$',
+  '^/posts/(' + guid + ')/visuals(?:/(upload|generate|concept|' + guid + ')(/select)?)?$',
 )
 export function allowedRoute(path: string, method: string): boolean {
   const pathname = path.split('?')[0]
@@ -43,7 +43,7 @@ export function allowedRoute(path: string, method: string): boolean {
   const tail = match[2]
   return !tail
     ? method === 'GET'
-    : tail === 'upload' || tail === 'generate'
+    : tail === 'upload' || tail === 'generate' || tail === 'concept'
       ? !match[3] && method === 'POST'
       : match[3]
         ? method === 'POST'
@@ -106,7 +106,7 @@ export function visualGateway(enabled: boolean, secret: string | undefined): Plu
         if (
           (req.method === 'POST' || req.method === 'PUT' || req.method === 'DELETE') &&
           (path.startsWith('/dev/facebook/') ||
-            path.endsWith('/generate') ||
+            path.endsWith('/generate') || path.endsWith('/concept') ||
             (path.startsWith('/visual-identities') && !path.endsWith('/logo'))) &&
           !contentType.startsWith('application/json')
         )

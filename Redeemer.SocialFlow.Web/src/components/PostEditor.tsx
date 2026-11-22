@@ -1,4 +1,5 @@
 import { PostVisuals } from './PostVisuals'
+import { PostTerminologyCheck } from './PostTerminologyCheck'
 import { useState, type FormEvent } from 'react'
 import { postsApi, platforms, type Post, type Platform, type KnowledgePassage } from '../api/posts'
 import { ErrorNotice, Modal } from './shared'
@@ -114,10 +115,12 @@ export function PostEditor({
             workspace={!localAdministration}
             post={post}
             brief={brief}
+            unsaved={title !== post.title || content !== post.content || brief !== (post.visualBrief || '') || cta !== (post.callToAction || '')}
             disabled={busy || visualBusy}
             onBusy={setVisualBusy}
           />
         )}
+        {post && !localAdministration && <PostTerminologyCheck post={post} disabled={busy || visualBusy || title !== post.title || content !== post.content || brief !== (post.visualBrief || '') || cta !== (post.callToAction || '')} />}
         <footer className="modal-footer">
           <button type="button" className="button" disabled={busy || visualBusy} onClick={close}>
             Cancel

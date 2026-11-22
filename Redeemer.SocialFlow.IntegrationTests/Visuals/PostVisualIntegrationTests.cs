@@ -58,7 +58,9 @@ public sealed class PostVisualIntegrationTests : IAsyncLifetime
         Assert.True(selected.Selected);
         Assert.NotNull(selected.ValidatedAt);
         var generator = new Generator();
-        var second = await Service().GenerateAsync(post, new("brand", "Brand", "Simple", ["#123456"]), null, generator);
+        var identity = new VisualIdentity("brand", "Brand", "Simple", ["#123456"]);
+        var concept = await Service().PrepareAsync(post, identity, null);
+        var second = await Service().GenerateAsync(post, identity, null, generator, expectedFingerprint: concept.Fingerprint);
         Assert.Equal("Existing brief", generator.Brief);
         Assert.Equal(VisualOrigin.Generated, second.Origin);
         Assert.False(second.Selected);

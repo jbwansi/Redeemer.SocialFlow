@@ -87,7 +87,8 @@ public sealed class VisualIdentityLibraryTests : IAsyncLifetime
         await using var db = Db();
         var post = SocialPost.Create("Title", "Content", SocialPlatform.LinkedIn); db.SocialPosts.Add(post); await db.SaveChangesAsync();
         var service = new PostVisualService(new SqlitePostVisualStore(options, storage, workspace: TestWorkspace.Context), storage, new SkiaVisualValidator(limits), limits);
-        var visual = await service.GenerateAsync(post.Id, effective, "Garden", new Generator());
+        var concept = await service.PrepareAsync(post.Id, effective, null);
+        var visual = await service.GenerateAsync(post.Id, effective, null, new Generator(), expectedFingerprint: concept.Fingerprint);
         var snapshot = visual.Generation!.EffectiveIdentity!;
         Assert.Equal(identity.Id, snapshot.LibraryId); Assert.Equal(identity.LogoId, snapshot.LogoId);
         Assert.Equal("Temporary name", snapshot.Name); Assert.Equal("Temporary instruction", snapshot.Instructions);
@@ -106,7 +107,8 @@ public sealed class VisualIdentityLibraryTests : IAsyncLifetime
         await Library().DeleteAsync(identity.Id, identity.Revision);
         await using var db = Db(); var post = SocialPost.Create("Title", "Content", SocialPlatform.LinkedIn); db.Add(post); await db.SaveChangesAsync();
         var service = new PostVisualService(new SqlitePostVisualStore(options, storage, workspace: TestWorkspace.Context), storage, new SkiaVisualValidator(limits), limits);
-        await Assert.ThrowsAsync<DomainException>(() => service.GenerateAsync(post.Id, effective, "Garden", new Generator()));
+        var concept = await service.PrepareAsync(post.Id, effective, null);
+        await Assert.ThrowsAsync<DomainException>(() => service.GenerateAsync(post.Id, effective, null, new Generator(), expectedFingerprint: concept.Fingerprint));
         Assert.Empty(await db.PostVisuals.ToListAsync());
     }
     [Fact] public async Task MigrationPreservesExistingSelectedVisualAndLegacyMetadata()

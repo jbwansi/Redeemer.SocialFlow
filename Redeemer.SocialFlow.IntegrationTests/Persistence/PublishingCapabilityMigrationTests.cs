@@ -20,7 +20,8 @@ public sealed class PublishingCapabilityMigrationTests
         var workspace = Workspace.Create("Legacy", WorkspaceType.Organization, "actor");
         await using var db = new SocialFlowDbContext(options, new ExplicitWorkspaceContext(workspace.Id));
         await db.GetService<IMigrator>().MigrateAsync("20261103152618_ConsolidateSocialConnectionIdentities");
-        db.Workspaces.Add(workspace); await db.SaveChangesAsync();
+        // Seed the historical schema without asking the current EF model to write newer columns.
+        await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO Workspaces (Id,Name,Type,Status,CreatedAtUtc,PersonalOwnerUserId) VALUES ({workspace.Id},{workspace.Name},{(int)workspace.Type},{(int)workspace.Status},{workspace.CreatedAtUtc},NULL)");
         foreach (var granted in new[] { true, false })
         {
             var id = Guid.NewGuid(); var revision = Guid.NewGuid(); var now = DateTimeOffset.UtcNow;

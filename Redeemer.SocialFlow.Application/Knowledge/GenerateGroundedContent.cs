@@ -36,7 +36,10 @@ public sealed class GenerateGroundedContent(IKnowledgePassageSearch search, ICon
         var references = selected.AsReadOnly();
         // Only retrieved, bounded references are passed, never caller-supplied references.
         if (progress is not null) progress.Stage = DraftGenerationStage.ProviderCall;
-        var result = await generator.GenerateAsync(request with { ReferencePassages = references }, cancellationToken);
+        var terms = request.TerminologyCatalog is null ? Array.Empty<Terminology.TermRule>() :
+            Terminology.TerminologyValidator.Applicable(request.TerminologyCatalog.Terms,
+                references.Select(x => x.Content).Concat(new[] { request.Subject, request.Objective, request.Audience, request.Context }).ToArray());
+        var result = await generator.GenerateAsync(request with { ReferencePassages = references, Terms = terms }, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
         return new(GroundedContentOutcome.Generated, result, references);
     }

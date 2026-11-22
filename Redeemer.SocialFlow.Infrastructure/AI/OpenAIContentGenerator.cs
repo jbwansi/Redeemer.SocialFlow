@@ -30,6 +30,8 @@ public sealed class OpenAIContentGenerator(
             request.Objective,
             request.Audience,
             request.Context,
+            request.EditorialIdentity,
+            ValidatedTerminology = request.Terms,
             Platform = request.Platform.ToString()
         });
 

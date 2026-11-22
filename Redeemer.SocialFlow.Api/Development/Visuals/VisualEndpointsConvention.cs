@@ -18,7 +18,7 @@ public sealed class VisualEndpointsConvention(bool enabled, bool workspaceEnable
                 continue;
             }
             foreach (var action in controller.Actions.Where(a => a.ActionName is nameof(PostVisualActions.Upload)
-                or nameof(PostVisualActions.Generate) or nameof(PostVisualActions.Select) or nameof(PostVisualActions.Delete)))
+                or nameof(PostVisualActions.Prepare) or nameof(PostVisualActions.Generate) or nameof(PostVisualActions.Select) or nameof(PostVisualActions.Delete)))
                 foreach (var selector in action.Selectors)
                     selector.EndpointMetadata.Add(new Microsoft.AspNetCore.Authorization.AuthorizeAttribute("WorkspaceEdit"));
         }

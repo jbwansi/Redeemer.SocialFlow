@@ -27,6 +27,7 @@ let items: Visual[]
 beforeEach(() => {
   vi.spyOn(identitiesApi, 'list').mockResolvedValue([])
   items = []
+  vi.spyOn(visualsApi, 'prepare').mockResolvedValue({ subject: 'Saved title', message: 'Saved message', scene: 'Scene', brief: 'Garden', style: 'Flat', exclusions: ['No invented logo'], conceptToken: 'approved-concept' })
   vi.mocked(visualsApi.runtime).mockResolvedValue({ enabled: true })
   vi.spyOn(visualsApi, 'list').mockImplementation(async () => [...items])
   vi.spyOn(visualsApi, 'image').mockResolvedValue(new Blob(['png'], { type: 'image/png' }))
@@ -58,15 +59,29 @@ async function identity() {
   await userEvent.clear(screen.getByLabelText('Code hexadécimal 1'))
   await userEvent.type(screen.getByLabelText('Code hexadécimal 1'), '#123456')
 }
+async function approveConcept() {
+  await userEvent.click(screen.getByRole('button', { name: 'Préparer le concept (sans coût)' }))
+  await userEvent.click(await screen.findByRole('checkbox', { name: 'Je valide ce concept avant la génération payante' }))
+}
 describe('visual management', () => {
+  it('shows terminology warnings before human confirmation and a paid request', async () => {
+    vi.mocked(visualsApi.prepare).mockResolvedValue({ subject: 'Subject', message: 'Message', scene: 'Scene', brief: 'Garden', style: 'Flat', exclusions: [], conceptToken: 'reviewed', warnings: ['Terminologie ambiguë : validation humaine requise.'] })
+    render(<PostVisuals post={post()} brief="Garden" />)
+    await screen.findByText('Aucun visuel pour cette publication.')
+    await identity()
+    await userEvent.click(screen.getByRole('button', { name: 'Préparer le concept (sans coût)' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Terminologie ambiguë')
+    expect(screen.getByRole('button', { name: 'Générer un visuel' })).toBeDisabled()
+    expect(visualsApi.generate).not.toHaveBeenCalled()
+  })
   it('does not generate on load/save; preserves editorial fields through generation and regeneration', async () => {
     const save = vi.spyOn(postsApi, 'update').mockResolvedValue(post())
     render(<PostEditor post={post({ visualBrief: 'Garden' })} close={vi.fn()} saved={vi.fn()} />)
     await screen.findByText('Aucun visuel pour cette publication.')
     expect(visualsApi.generate).not.toHaveBeenCalled()
-    await userEvent.type(screen.getByLabelText('Content'), ' retained')
     const content = (screen.getByLabelText('Content') as HTMLTextAreaElement).value
     await identity()
+    await approveConcept()
     await userEvent.click(screen.getByRole('button', { name: 'Générer un visuel' }))
     await screen.findByAltText('Visuel candidat')
     expect(visualsApi.generate).toHaveBeenCalledWith(
@@ -74,13 +89,39 @@ describe('visual management', () => {
       expect.objectContaining({ identityId: 'brand', colors: ['#123456'] }),
       'Garden',
       expect.any(AbortSignal),
+      'approved-concept',
     )
+    await approveConcept()
     await userEvent.click(screen.getByRole('button', { name: 'Régénérer' }))
     await waitFor(() => expect(screen.getAllByAltText('Visuel candidat')).toHaveLength(2))
     expect(screen.getByLabelText('Content')).toHaveValue(content)
     await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
     expect(save).toHaveBeenCalled()
     expect(visualsApi.generate).toHaveBeenCalledTimes(2)
+  })
+  it('previews freely, requires confirmation and invalidates on identity changes', async () => {
+    render(<PostVisuals post={post()} brief="Garden" />)
+    await screen.findByText('Aucun visuel pour cette publication.')
+    await identity()
+    expect(screen.getByRole('button', { name: 'Générer un visuel' })).toBeDisabled()
+    await userEvent.click(screen.getByRole('button', { name: 'Préparer le concept (sans coût)' }))
+    await screen.findByRole('region', { name: 'Concept visuel' })
+    expect(visualsApi.generate).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Générer un visuel' })).toBeDisabled()
+    await userEvent.click(screen.getByRole('checkbox'))
+    expect(screen.getByRole('button', { name: 'Générer un visuel' })).toBeEnabled()
+    await userEvent.type(screen.getByLabelText('Style visuel'), ' changed')
+    expect(screen.queryByRole('region', { name: 'Concept visuel' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Générer un visuel' })).toBeDisabled()
+  })
+  it('requires saving editorial edits before preparing a concept', async () => {
+    render(<PostEditor post={post({ visualBrief: 'Garden' })} close={vi.fn()} saved={vi.fn()} />)
+    await screen.findByText('Aucun visuel pour cette publication.')
+    await userEvent.type(screen.getByLabelText('Content'), ' changed')
+    expect(screen.getByRole('button', { name: 'Préparer le concept (sans coût)' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Générer un visuel' })).toBeDisabled()
+    expect(visualsApi.prepare).not.toHaveBeenCalled()
+    expect(visualsApi.generate).not.toHaveBeenCalled()
   })
   it('uploads, previews, selects, protects selected and deletes an unused version', async () => {
     items = [visual('old')]
@@ -143,6 +184,7 @@ describe('visual management', () => {
     render(<PostVisuals post={post()} brief="Garden" />)
     await screen.findByText('Aucun visuel pour cette publication.')
     await identity()
+    await approveConcept()
     await userEvent.click(screen.getByRole('button', { name: 'Générer un visuel' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('Limite de génération')
     expect(screen.getByLabelText('Nom de l’identité')).toHaveValue('Brand')
@@ -158,10 +200,12 @@ describe('visual management', () => {
     render(<PostVisuals post={post()} brief="Garden" />)
     await screen.findByText('Aucun visuel pour cette publication.')
     await identity()
+    await approveConcept()
     await userEvent.click(screen.getByRole('button', { name: 'Générer un visuel' }))
     await userEvent.click(await screen.findByRole('button', { name: 'Annuler l’attente' }))
     await screen.findByText(/L’opération peut déjà avoir été traitée/)
-    expect(screen.getByRole('button', { name: 'Générer un visuel' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Générer un visuel' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Préparer le concept (sans coût)' })).toBeEnabled()
   })
   it('handles disabled gateway and empty posts', async () => {
     vi.mocked(visualsApi.runtime).mockResolvedValue({ enabled: false })
@@ -225,7 +269,7 @@ describe('visual management', () => {
     await identity()
     await userEvent.clear(screen.getByLabelText('Code hexadécimal 1'))
     await userEvent.type(screen.getByLabelText('Code hexadécimal 1'), '#XYZ')
-    await userEvent.click(screen.getByRole('button', { name: 'Générer un visuel' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Préparer le concept (sans coût)' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('Informations manquantes')
     expect(visualsApi.generate).not.toHaveBeenCalled()
   })

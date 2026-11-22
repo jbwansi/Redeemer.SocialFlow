@@ -1,4 +1,16 @@
 import { apiRequest } from './posts'
+export interface VisualConcept {
+  warnings?: string[]
+  subject: string
+  message: string
+  scene: string
+  brief: string
+  style: string
+  exclusions: string[]
+  identityName?: string
+  identityStatus?: string
+  conceptToken: string
+}
 export interface VisualAvailability {
   enabled: boolean
   uploadEnabled?: boolean
@@ -20,6 +32,7 @@ export interface Visual {
   generation: Record<string, unknown> | null
 }
 export interface VisualIdentity {
+  identityMode?: 'Approved' | 'Temporary'
   identityId: string
   name: string
   style: string
@@ -50,10 +63,14 @@ function createVisualsApi(workspace: boolean) {
   list: (post: string, signal?: AbortSignal) => request<Visual[]>(path(post), { signal }),
   image: (post: string, id: string, signal?: AbortSignal) =>
     request<Blob>(path(post) + '/' + encodeURIComponent(id), { signal }, true),
-  generate: (post: string, identity: VisualIdentity, visualBrief: string, signal?: AbortSignal) =>
+  prepare: (post: string, identity: VisualIdentity, visualBrief: string, signal?: AbortSignal) =>
+    request<VisualConcept>(path(post) + '/concept', {
+      method: 'POST', body: JSON.stringify({ ...identity, visualBrief }), signal,
+    }),
+  generate: (post: string, identity: VisualIdentity, visualBrief: string, signal?: AbortSignal, conceptToken?: string) =>
     request<Visual>(path(post) + '/generate', {
       method: 'POST',
-      body: JSON.stringify({ ...identity, visualBrief }),
+      body: JSON.stringify({ ...identity, visualBrief, conceptToken }),
       signal,
     }),
   upload: (post: string, file: File, signal?: AbortSignal) => {

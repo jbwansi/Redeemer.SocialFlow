@@ -18,6 +18,8 @@ public sealed class AiGeneration : IWorkspaceResource
     public string Model { get; private set; } = string.Empty;
     public IReadOnlyList<string> Warnings { get; private set; } = Array.Empty<string>();
     public DateTimeOffset GeneratedAt { get; private set; }
+    public string? TerminologyEvidenceJson { get; private set; }
+    public void RecordTerminology(string json) => TerminologyEvidenceJson = json;
 
     public static AiGeneration Create(Guid socialPostId, string subject, string objective,
         string audience, SocialPlatform platform, string provider, string model,

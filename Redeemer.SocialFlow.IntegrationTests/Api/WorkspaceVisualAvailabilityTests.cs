@@ -72,9 +72,20 @@ public sealed partial class WorkspaceIsolationTests
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync(path)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/posts/{foreign.Id}/workspace-visuals")).StatusCode);
         Assert.Equal(0, generator.Calls);
+        var input = new { identityMode = "Temporary", identityId = "test", name = "Test", style = "Simple", colors = new[] { "#123456" }, visualBrief = "" };
+        var prepared = await Send(client, HttpMethod.Post, path + "/concept", input);
+        Assert.Equal(role == WorkspaceRole.Viewer ? HttpStatusCode.Forbidden : HttpStatusCode.OK, prepared.StatusCode);
+        Assert.Equal(0, generator.Calls);
+        var conceptToken = role == WorkspaceRole.Viewer ? "invalid" :
+            (await prepared.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("conceptToken").GetString();
         var generated = await Send(client, HttpMethod.Post, path + "/generate",
-            new { identityId = "test", name = "Test", style = "Simple", colors = new[] { "#123456" }, visualBrief = "Test image" });
+            new { input.identityMode, input.identityId, input.name, input.style, input.colors, input.visualBrief, conceptToken });
         Assert.Equal(role == WorkspaceRole.Viewer ? HttpStatusCode.Forbidden : HttpStatusCode.Created, generated.StatusCode);
+        if (role != WorkspaceRole.Viewer)
+        {
+            Assert.Equal(own.Title, generator.LastRequest!.Title);
+            Assert.Equal(own.Content, generator.LastRequest.Content);
+        }
         var csrf = await client.GetFromJsonAsync<JsonElement>("/api/auth/csrf");
         using var form = new MultipartFormDataContent();
         form.Add(new ByteArrayContent(WorkspaceImageGenerator.Png()), "file", "test.png");
@@ -88,6 +99,7 @@ public sealed partial class WorkspaceIsolationTests
     private sealed class WorkspaceImageGenerator : IVisualGenerator
     {
         public int Calls;
+        public GenerateVisualRequest? LastRequest;
         public static byte[] Png()
         {
             using var bitmap = new SKBitmap(16, 12);
@@ -99,6 +111,7 @@ public sealed partial class WorkspaceIsolationTests
         public Task<GeneratedVisual> GenerateAsync(GenerateVisualRequest request, CancellationToken cancellationToken = default)
         {
             Calls++;
+            LastRequest = request;
             var bytes = Png();
             return Task.FromResult(new GeneratedVisual(bytes, new("Fake", "test", request.Identity.Id,
                 request.Platform, request.VisualBrief, "image/png", 16, 12, bytes.Length, "medium", DateTimeOffset.UtcNow)));

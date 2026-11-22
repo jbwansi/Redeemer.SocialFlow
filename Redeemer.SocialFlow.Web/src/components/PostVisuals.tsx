@@ -1,9 +1,9 @@
-import { VisualIdentityEditor } from './VisualIdentityEditor'
+import { WorkspaceIdentityPicker } from './WorkspaceIdentityPicker'
 import { VisualIdentityLibrary } from './VisualIdentityLibrary'
 import { emptyIdentity } from '../lib/visualIdentities'
 import { useEffect, useRef, useState } from 'react'
 import { ApiError, type Post } from '../api/posts'
-import { visualsApi, workspaceVisualsApi, type Visual, type VisualAvailability } from '../api/visuals'
+import { visualsApi, workspaceVisualsApi, type Visual, type VisualAvailability, type VisualConcept } from '../api/visuals'
 import { ErrorNotice } from './shared'
 
 export function VisualPreview({ postId, visual, workspace = false }: { postId: string; visual: Visual; workspace?: boolean }) {
@@ -49,12 +49,14 @@ export function PostVisuals({
   disabled = false,
   onBusy,
   workspace = false,
+  unsaved = false,
 }: {
   post: Post
   brief?: string
   readOnly?: boolean
   disabled?: boolean
   workspace?: boolean
+  unsaved?: boolean
   onBusy?: (busy: boolean) => void
 }) {
   const api = workspace ? workspaceVisualsApi : visualsApi
@@ -68,6 +70,12 @@ export function PostVisuals({
   const [notice, setNotice] = useState('')
   const [identityBusy, setIdentityBusy] = useState(false)
   const [identity, setIdentity] = useState(emptyIdentity)
+  const [concept, setConcept] = useState<VisualConcept>()
+  const [confirmed, setConfirmed] = useState(false)
+  useEffect(() => {
+    setConcept(undefined)
+    setConfirmed(false)
+  }, [post.id, post.title, post.content, post.updatedAt, brief, identity, unsaved])
   const active = useRef<AbortController | null>(null)
   const mounted = useRef(false)
   const busyCallback = useRef(onBusy)
@@ -140,11 +148,10 @@ export function PostVisuals({
       }
     }
   }
-  function generate() {
-    if (!editable || locked || !canGenerate || identity.isActive === false) return
+  function prepare() {
+    if (!editable || locked || unsaved || !canGenerate || identity.isActive === false || (workspace && !identity.identityMode)) return
     const colors = identity.colors
     if (
-      !brief.trim() ||
       !identity.identityId.trim() ||
       !identity.name.trim() ||
       !identity.style.trim() ||
@@ -156,14 +163,25 @@ export function PostVisuals({
         new ApiError({
           title: 'Informations manquantes',
           detail:
-            'Renseignez le brief, l’identité, son nom, son style et 1 à 8 couleurs valides au format #RRGGBB.',
+            'Renseignez l’identité, son nom, son style et 1 à 8 couleurs valides au format #RRGGBB.',
         }),
       )
       return
     }
+    setConcept(undefined)
+    setConfirmed(false)
+    void run('Préparation sans appel IA…', async (signal) => {
+      const result = await api.prepare(post.id, { ...identity, colors }, brief, signal)
+      if (!signal.aborted && mounted.current) setConcept(result)
+    })
+  }
+  function generate() {
+    if (!editable || locked || unsaved || !canGenerate || !concept || !confirmed) return
+    const approved = concept
+    setConcept(undefined)
+    setConfirmed(false)
     void run('Génération en cours…', (signal) =>
-      api.generate(post.id, { ...identity, colors }, brief, signal),
-    )
+      api.generate(post.id, identity, brief, signal, approved.conceptToken))
   }
   if (available === false)
     return workspace ? <p className="field-note">Les visuels sont désactivés pour cet environnement.</p> : readOnly ? null : (
@@ -195,16 +213,37 @@ export function PostVisuals({
           <details>
             <summary>Identité visuelle pour la génération</summary>
             {workspace ? (
-              <VisualIdentityEditor value={identity} onChange={setIdentity} localLibrary={false} />
+              <WorkspaceIdentityPicker value={identity} onChange={setIdentity} />
             ) : (
               <VisualIdentityLibrary value={identity} onChange={setIdentity} onBusy={setIdentityBusy} />
             )}
           </details>
+          {unsaved && <p role="status">Enregistrez les modifications de la publication avant de préparer un concept.</p>}
+          <button type="button" className="button" disabled={unsaved || !canGenerate || identity.isActive === false || (workspace && !identity.identityMode)} onClick={prepare}>
+            Préparer le concept (sans coût)
+          </button>
+          {concept && <section aria-label="Concept visuel">
+            <h4>{concept.subject}</h4>
+            {!!concept.warnings?.length && <div role="alert"><strong>Revue terminologique requise</strong>
+              <ul>{concept.warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>
+              <p>Vérifiez les ambiguïtés et les zones conservées avant de valider ce concept.</p>
+            </div>}
+            {concept.identityName && <p>{concept.identityName} · {concept.identityStatus === 'Approved' ? 'Approuvée' : 'Temporaire, non approuvée'}</p>}
+            <p><strong>Message du concept, issu du contenu enregistré :</strong> {concept.message}</p>
+            <p><strong>Scène proposée :</strong> {concept.scene}</p>
+            <p><strong>Brief complémentaire :</strong> {concept.brief}</p>
+            <p><strong>Style :</strong> {concept.style}</p>
+            <ul>{concept.exclusions.map(x => <li key={x}>{x}</li>)}</ul>
+            <p>Le sujet enregistré reste prioritaire. Pour revoir le brief, modifiez et enregistrez la publication, puis préparez à nouveau le concept.</p>
+            <label><input type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)} />
+              Je valide ce concept avant la génération payante
+            </label>
+          </section>}
           <div className="visual-actions">
             <button
               type="button"
               className="button primary"
-              disabled={identity.isActive === false || !canGenerate}
+              disabled={identity.isActive === false || !canGenerate || unsaved || !concept || !confirmed}
               onClick={generate}
             >
               {visuals.length ? 'Régénérer' : 'Générer un visuel'}

@@ -4,8 +4,11 @@ import { workspaceVisualsApi } from '../api/visuals'
 import { ApiError } from '../api/posts'
 import { post } from '../test/fixtures'
 import { PostVisuals } from './PostVisuals'
+import userEvent from '@testing-library/user-event'
+import { workspaceIdentitiesApi } from '../api/visualIdentities'
 
 beforeEach(() => {
+  vi.spyOn(workspaceIdentitiesApi, 'list').mockResolvedValue([])
   vi.spyOn(workspaceVisualsApi, 'list').mockResolvedValue([])
   vi.spyOn(workspaceVisualsApi, 'generate')
   vi.spyOn(workspaceVisualsApi, 'upload')
@@ -26,7 +29,9 @@ it.each([true, false])('separates generation configuration from upload (configur
     generationEnabled: configured, reason: configured ? null : 'ImageGenerationNotConfigured' })
   render(<PostVisuals post={post()} workspace />)
   await screen.findByText('Aucun visuel pour cette publication.')
-  expect(screen.getByRole('button', { name: 'Générer un visuel' })).toHaveProperty('disabled', !configured)
+  expect(screen.getByRole('button', { name: 'Générer un visuel' })).toBeDisabled()
+  await userEvent.click(screen.getByLabelText('Utiliser explicitement une identité temporaire, non approuvée'))
+  expect(screen.getByRole('button', { name: 'Préparer le concept (sans coût)' })).toHaveProperty('disabled', !configured)
   expect(screen.getByLabelText('Importer une image')).toBeEnabled()
   expect(workspaceVisualsApi.generate).not.toHaveBeenCalled()
 })

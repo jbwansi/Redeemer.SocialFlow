@@ -9,6 +9,9 @@ public sealed record GenerateContentRequest(
 	SocialPlatform Platform)
 {
     public string? Context { get; init; }
+    public EditorialIdentity? EditorialIdentity { get; init; }
+    public Terminology.TerminologyCatalog? TerminologyCatalog { get; init; }
+    public IReadOnlyList<Terminology.TermRule> Terms { get; init; } = Array.Empty<Terminology.TermRule>();
 
     public IReadOnlyList<Knowledge.KnowledgePassage> ReferencePassages { get; init; } = Array.Empty<Knowledge.KnowledgePassage>();
 }

@@ -1,6 +1,8 @@
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
@@ -20,6 +22,9 @@ public sealed class BusinessApiFactory : WebApplicationFactory<Program>
     protected override void ConfigureWebHost(IWebHostBuilder builder) => builder.ConfigureServices(services =>
     {
         TestWorkspace.Register(services);
+        // Test confirmation tokens without reading/writing the developer's persistent key ring.
+        services.RemoveAll<IDataProtectionProvider>();
+        services.AddSingleton<IDataProtectionProvider>(new EphemeralDataProtectionProvider());
         services.AddTransient<BusinessAdministrator>();
         services.PostConfigure<AuthenticationOptions>(options =>
             options.SchemeMap[AccountSecurity.LocalScheme].HandlerType = typeof(BusinessAdministrator));

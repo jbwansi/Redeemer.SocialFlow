@@ -1,13 +1,18 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.DataProtection;
+using System.Security.Cryptography;
+using System.Security.Claims;
 using Redeemer.SocialFlow.Api.Development.Visuals;
 using Redeemer.SocialFlow.Application.AI;
 using Redeemer.SocialFlow.Application.Visuals;
+using Redeemer.SocialFlow.Infrastructure.Visuals;
 
 namespace Redeemer.SocialFlow.Api.Controllers;
 
 public sealed record GenerateVisualApiRequest(string IdentityId, string Name, string Style, string[] Colors,
-    string? Slogan = null, string? VisualBrief = null, string? Instructions = null, Guid? LibraryId = null, long? Revision = null);
+    string? Slogan = null, string? VisualBrief = null, string? Instructions = null, Guid? LibraryId = null, long? Revision = null,
+    string? ConceptToken = null, string? IdentityMode = null);
 
 [ApiController]
 [Route("api/posts/{postId:guid}/visuals")]
@@ -25,6 +30,45 @@ public sealed class WorkspaceVisualsController(PostVisualService visuals) : Post
 
 public abstract class PostVisualActions(PostVisualService visuals) : ControllerBase
 {
+    private ITimeLimitedDataProtector ConceptProtector => HttpContext.RequestServices
+        .GetRequiredService<IDataProtectionProvider>()
+        .CreateProtector("VisualConcept", VisualConcept.Version, User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "local")
+        .ToTimeLimitedDataProtector();
+
+    private async Task<VisualIdentity> ResolveIdentity(GenerateVisualApiRequest request, CancellationToken token)
+    {
+        var identity = new VisualIdentity(request.IdentityId, request.Name, request.Style, request.Colors, request.Slogan, request.Instructions);
+        if (this is WorkspaceVisualsController)
+        {
+            if (request.IdentityMode == "Approved" && request.LibraryId is Guid approvedId && request.Revision is long approvedRevision)
+                return await HttpContext.RequestServices.GetRequiredService<WorkspaceIdentityService>()
+                    .ResolveApprovedAsync(approvedId, approvedRevision, identity, token);
+            if (request.IdentityMode == "Temporary" && request.LibraryId is null && request.Revision is null)
+                return identity;
+            throw new ArgumentException("Choose an approved identity or explicitly authorize temporary settings.");
+        }
+        if (request.LibraryId is Guid libraryId)
+        {
+            if (request.Revision is not long revision) throw new ArgumentException("Identity revision is required.");
+            identity = await HttpContext.RequestServices.GetRequiredService<VisualIdentityLibrary>()
+                .ResolveAsync(libraryId, revision, identity, token);
+        }
+        return identity;
+    }
+
+    [HttpPost("concept")]
+    [RequestSizeLimit(64 * 1024)]
+    public async Task<IActionResult> Prepare(Guid postId, GenerateVisualApiRequest request, CancellationToken token)
+    {
+        var identity = await ResolveIdentity(request, token);
+        var concept = await visuals.PrepareAsync(postId, identity, request.VisualBrief, token);
+        return Ok(new { concept.Subject, concept.Message, concept.Scene, concept.Brief, concept.Style, concept.Exclusions,
+            Warnings = concept.Terminology?.Warnings ?? Array.Empty<string>(), concept.Terminology,
+            IdentityName = identity.Name, IdentityStatus = identity.ApprovalId.HasValue ? "Approved" : "Temporary",
+            identity.LibraryId, identity.Revision, identity.ApprovalId,
+            ConceptToken = ConceptProtector.Protect(concept.Fingerprint, TimeSpan.FromMinutes(30)) });
+    }
+
     [HttpPost("upload")]
     [RequestSizeLimit(21 * 1024 * 1024)]
     [RequestFormLimits(MultipartBodyLengthLimit = 21 * 1024 * 1024)]
@@ -41,15 +85,18 @@ public abstract class PostVisualActions(PostVisualService visuals) : ControllerB
     public async Task<ActionResult<VisualDto>> Generate(Guid postId, GenerateVisualApiRequest? request, CancellationToken token)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var identity = new VisualIdentity(request.IdentityId, request.Name, request.Style, request.Colors, request.Slogan, request.Instructions);
-        if (request.LibraryId is Guid libraryId)
+        if (string.IsNullOrWhiteSpace(request.ConceptToken)) throw new VisualConceptException("VisualConceptRequired");
+        string fingerprint;
+        try { fingerprint = ConceptProtector.Unprotect(request.ConceptToken); }
+        catch (CryptographicException) { throw new VisualConceptException("VisualConceptExpiredOrInvalid"); }
+        var identity = await ResolveIdentity(request, token);
+        var current = await visuals.PrepareAsync(postId, identity, request.VisualBrief, token);
+        if (current.Fingerprint != fingerprint)
         {
-            if (request.Revision is not long revision) throw new ArgumentException("Identity revision is required.");
-            identity = await HttpContext.RequestServices.GetRequiredService<VisualIdentityLibrary>()
-                .ResolveAsync(libraryId, revision, identity, token);
+            throw new VisualConceptException("VisualConceptStale");
         }
         var generator = HttpContext.RequestServices.GetRequiredService<IVisualGenerator>();
-        var visual = await visuals.GenerateAsync(postId, identity, request.VisualBrief, generator, token);
+        var visual = await visuals.GenerateAsync(postId, identity, request.VisualBrief, generator, token, fingerprint);
         return CreatedAtAction(nameof(Get), new { postId, visualId = visual.Id }, visual);
     }
     [HttpGet]

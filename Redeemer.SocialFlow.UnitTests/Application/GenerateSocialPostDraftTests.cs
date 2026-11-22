@@ -27,7 +27,7 @@ public sealed class GenerateSocialPostDraftTests
         using var cancellation = new CancellationTokenSource();
         var generator = new StubGenerator((received, token) =>
         {
-            Assert.Same(request, received);
+            Assert.Equal(request, received);
             Assert.Equal(cancellation.Token, token);
             Assert.Empty(context.Posts.Added);
             Assert.Empty(context.Audits.Added);
@@ -144,7 +144,7 @@ public sealed class GenerateSocialPostDraftTests
         using var cancellation = new CancellationTokenSource();
         var grounded = new GroundedGenerator((request, token) =>
         {
-            Assert.Same(Request, request);
+            Assert.Equal(Request, request);
             Assert.Equal(cancellation.Token, token);
             return Task.FromResult(new GroundedContentResult(outcome,
                 outcome == GroundedContentOutcome.Generated ? new(Content, new("Provider", "Model")) : null, references));

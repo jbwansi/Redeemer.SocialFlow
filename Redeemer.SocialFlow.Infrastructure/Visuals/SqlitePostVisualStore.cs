@@ -28,7 +28,7 @@ public sealed class SqlitePostVisualStore(DbContextOptions<SocialFlowDbContext> 
         await using var db = Db();
         var post = await Post(db, postId, token);
         post.EnsureCanManageVisuals();
-        return new(post.Id, post.Platform, post.VisualBrief);
+        return new(post.Id, post.Platform, post.VisualBrief, post.Title, post.Content, post.WorkspaceId, post.UpdatedAt);
     }
     public async Task<VisualReservation> ReserveAsync(Guid postId, NewVisual visual, CancellationToken token)
     {

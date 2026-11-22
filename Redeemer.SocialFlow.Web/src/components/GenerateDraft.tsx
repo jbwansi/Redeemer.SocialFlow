@@ -1,4 +1,5 @@
-import { useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { apiRequest } from '../api/posts'
 import {
   postsApi,
   platforms,
@@ -11,9 +12,11 @@ import { ErrorNotice, Modal } from './shared'
 export function GenerateDraft({
   close,
   saved,
+  workspace = false,
 }: {
   close: () => void
   saved: (result: GeneratedDraftSuccess) => void
+  workspace?: boolean
 }) {
   const [subject, setSubject] = useState('')
   const [objective, setObjective] = useState('')
@@ -25,6 +28,17 @@ export function GenerateDraft({
   const [busy, setBusy] = useState(false)
   const pending = useRef(false)
   const [error, setError] = useState<unknown>()
+  const [identityNotice, setIdentityNotice] = useState('Chargement de l’identité éditoriale…')
+  useEffect(() => {
+    if (!workspace) return
+    const controller = new AbortController()
+    void apiRequest<{ workspaceId: string; profile: { organizationName: string; revision: number } | null }>('/workspace-identities/editorial', { signal: controller.signal }).then(x => {
+      if (!controller.signal.aborted) setIdentityNotice(x.profile
+        ? `${x.profile.organizationName} · profil éditorial révision ${x.profile.revision} · espace ${x.workspaceId}`
+        : 'Profil éditorial absent : génération neutre, sans personnalisation du workspace.')
+    }).catch(() => { if (!controller.signal.aborted) setIdentityNotice('Impossible de charger l’aperçu du profil. Le serveur vérifiera le profil de cet espace lors de la génération.') })
+    return () => controller.abort()
+  }, [workspace])
   async function submit(event: FormEvent) {
     event.preventDefault()
     if (pending.current || !mode || !subject.trim() || !objective.trim() || !audience.trim()) return
@@ -51,6 +65,7 @@ export function GenerateDraft({
   return (
     <Modal title="Générer un brouillon" close={close} busy={busy}>
       <form className="editor-form" onSubmit={submit} aria-busy={busy}>
+        {workspace && <p role="status">{identityNotice}</p>}
         <p className="field-note">
           Le contenu sera enregistré comme brouillon (Draft). Une relecture humaine est nécessaire
           avant toute soumission pour validation.

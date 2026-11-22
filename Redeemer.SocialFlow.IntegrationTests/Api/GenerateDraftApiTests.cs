@@ -113,9 +113,13 @@ public sealed partial class GenerateDraftApiTests : IAsyncLifetime
         using var response = await client.PostAsJsonAsync("/api/posts/generate-draft", Request);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var result = (await response.Content.ReadFromJsonAsync<GenerateSocialPostDraftExecutionResult>())!.Draft!;
-        Assert.Equal(new GenerateContentRequest(Request.Subject, Request.Objective, Request.Audience, Request.Platform!.Value), _generator.Received);
+        Assert.Equal(new GenerateContentRequest(Request.Subject, Request.Objective, Request.Audience, Request.Platform!.Value),
+            _generator.Received! with { TerminologyCatalog = null });
+        Assert.NotNull(_generator.Received!.TerminologyCatalog);
+        Assert.Empty(_generator.Received.Terms);
         Assert.Equal(1, _generator.Calls);
-        Assert.Equal(_generator.Result.Warnings, result.Warnings);
+        Assert.Equal(_generator.Result.Warnings, result.Warnings.Take(_generator.Result.Warnings.Count));
+        Assert.Contains(result.Warnings, x => x.Contains("Identité éditoriale absente"));
         Assert.EndsWith($"/api/posts/{result.Post.Id}", response.Headers.Location!.ToString());
         Assert.Equal(result.Post, await client.GetFromJsonAsync<SocialPostDto>(response.Headers.Location));
         await using var scope = _factory.Services.CreateAsyncScope();
@@ -262,7 +266,8 @@ public sealed partial class GenerateDraftApiTests : IAsyncLifetime
         Assert.Equal(SocialPostDraftOutcome.Created, result.Outcome);
         Assert.NotNull(result.Draft);
         Assert.Equal(result.PostId, result.Draft.Post.Id);
-        Assert.Equal(_generator.Result.Warnings, result.Draft.Warnings);
+        Assert.Equal(_generator.Result.Warnings, result.Draft.Warnings.Take(_generator.Result.Warnings.Count));
+        Assert.Contains(result.Draft.Warnings, x => x.Contains("Identité éditoriale absente"));
         Assert.Equal(new ContentGenerationMetadata("TestProvider", "test-model"), result.Metadata);
         Assert.Equal(SocialPostStatus.Draft, result.Draft.Post.Status);
         Assert.EndsWith($"/api/posts/{result.PostId}", response.Headers.Location!.ToString());

@@ -33,6 +33,19 @@ public sealed class OpenAIVisualGeneratorTests
         Assert.False(json.RootElement.TryGetProperty("response_format", out _));
     }
     private static VisualIdentity Identity => new("brand-a", "Brand A", "Clean and human", ["#123456"], "Together");
+    [Fact]
+    public async Task PromptContainsSavedEditorialContextWithPriorityOverConflictingBrief()
+    {
+        using var harness = new Harness(Png());
+        await harness.Generator.GenerateAsync(new("Illustrate an unrelated topic", SocialPlatform.LinkedIn,
+            Identity, title: "Saved subject", content: "Saved editorial message"));
+        using var json = JsonDocument.Parse(Assert.Single(harness.Handler.Requests).Body);
+        var prompt = json.RootElement.GetProperty("prompt").GetString()!;
+        Assert.Contains("Saved subject", prompt);
+        Assert.Contains("Saved editorial message", prompt);
+        Assert.Contains("Never let the brief", prompt);
+        Assert.Contains("Ignore conflicting suggestions", prompt);
+    }
     private static GenerateVisualRequest Request(SocialPlatform platform = SocialPlatform.LinkedIn,
         VisualLayout? layout = null) => new("A team working together", platform, Identity, layout);
 

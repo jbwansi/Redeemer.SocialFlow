@@ -1,11 +1,12 @@
 using System.Security.Cryptography;
 using Redeemer.SocialFlow.Application.AI;
 using Redeemer.SocialFlow.Domain.Entities;
+using Redeemer.SocialFlow.Application.Terminology;
 
 namespace Redeemer.SocialFlow.Application.Visuals;
 
 public sealed class PostVisualService(IPostVisualStore store, IVisualStorage storage,
-    IVisualValidator validator, VisualLimits limits)
+    IVisualValidator validator, VisualLimits limits, ITerminologyReader? terminology = null)
 {
     public async Task<VisualDto> UploadAsync(Guid postId, Stream input, CancellationToken token = default)
     {
@@ -21,13 +22,24 @@ public sealed class PostVisualService(IPostVisualStore store, IVisualStorage sto
         return await SaveAsync(postId, memory.ToArray(), VisualOrigin.Uploaded, null, token);
     }
 
+    public async Task<VisualConcept> PrepareAsync(Guid postId, VisualIdentity identity, string? visualBrief,
+        CancellationToken token = default) =>
+        VisualConcept.Create(await store.EditablePostAsync(postId, token), identity, visualBrief,
+            terminology is null ? null : await terminology.ReadAsync(token));
+
     public async Task<VisualDto> GenerateAsync(Guid postId, VisualIdentity identity, string? visualBrief,
-        IVisualGenerator generator, CancellationToken token = default)
+        IVisualGenerator generator, CancellationToken token = default, string? expectedFingerprint = null)
     {
+        if (string.IsNullOrWhiteSpace(expectedFingerprint)) throw new VisualConceptException("VisualConceptRequired");
         var post = await store.EditablePostAsync(postId, token);
-        var request = new GenerateVisualRequest(visualBrief ?? post.VisualBrief!, post.Platform, identity);
+        var concept = VisualConcept.Create(post, identity, visualBrief, terminology is null ? null : await terminology.ReadAsync(token));
+        if (concept.Fingerprint != expectedFingerprint)
+            throw new VisualConceptException("VisualConceptStale");
+        var request = new GenerateVisualRequest(concept.Brief, post.Platform, identity, title: concept.Subject, content: concept.Message,
+            terms: concept.Terminology?.Terms);
         var result = await generator.GenerateAsync(request, token);
-        return await SaveAsync(postId, result.Bytes, VisualOrigin.Generated, result.Metadata with { EffectiveIdentity = identity.Snapshot() }, token);
+        return await SaveAsync(postId, result.Bytes, VisualOrigin.Generated, result.Metadata with
+            { EffectiveIdentity = identity.Snapshot(), Terminology = concept.Terminology }, token);
     }
 
     private async Task<VisualDto> SaveAsync(Guid postId, ReadOnlyMemory<byte> bytes, VisualOrigin origin,

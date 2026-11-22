@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
-import { identitiesApi, effectiveIdentity, type LibraryIdentity } from '../api/visualIdentities'
+import { identitiesApi, workspaceIdentitiesApi, effectiveIdentity, type LibraryIdentity } from '../api/visualIdentities'
 import type { VisualIdentity } from '../api/visuals'
 import { ApiError } from '../api/posts'
 import { cleanIdentity, emptyIdentity, loadIdentities } from '../lib/visualIdentities'
 import { VisualIdentityEditor } from './VisualIdentityEditor'
 import { ErrorNotice } from './shared'
 
-export function IdentityLogoPreview({ identity }: { identity: LibraryIdentity }) {
+export function IdentityLogoPreview({ identity, workspace = false }: { identity: LibraryIdentity; workspace?: boolean }) {
+  const api = workspace ? workspaceIdentitiesApi : identitiesApi
   const [url, setUrl] = useState('')
   const [error, setError] = useState<unknown>()
   useEffect(() => {
@@ -15,7 +16,7 @@ export function IdentityLogoPreview({ identity }: { identity: LibraryIdentity })
     setUrl('')
     setError(undefined)
     if (identity.logoId)
-      void identitiesApi
+      void api
         .logo(identity.id, identity.logoId, controller.signal)
         .then((blob) => {
           if (controller.signal.aborted) return
@@ -29,7 +30,7 @@ export function IdentityLogoPreview({ identity }: { identity: LibraryIdentity })
       controller.abort()
       if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
-  }, [identity.id, identity.logoId])
+  }, [api, identity.id, identity.logoId])
   if (error) return <ErrorNotice error={error} />
   return url ? (
     <img className="visual-preview" src={url} alt="Logo officiel de l’identité" />
@@ -44,11 +45,16 @@ export function VisualIdentityLibrary({
   value,
   onChange,
   onBusy,
+  workspace = false,
+  canManage = true,
 }: {
+  workspace?: boolean
+  canManage?: boolean
   value: VisualIdentity
   onChange: (value: VisualIdentity) => void
   onBusy?: (busy: boolean) => void
 }) {
+  const api = workspace ? workspaceIdentitiesApi : identitiesApi
   const [legacy, setLegacy] = useState<VisualIdentity[]>([])
   const [entries, setEntries] = useState<LibraryIdentity[]>([])
   const [busy, setBusy] = useState(true)
@@ -62,7 +68,7 @@ export function VisualIdentityLibrary({
     const controller = new AbortController()
     active.current = controller
     callbacks.current.onBusy?.(true)
-    void identitiesApi
+    void api
       .list(controller.signal)
       .then((list) => {
         if (controller.signal.aborted) return
@@ -85,7 +91,7 @@ export function VisualIdentityLibrary({
       active.current?.abort()
       callbacks.current.onBusy?.(false)
     }
-  }, [])
+  }, [api])
   async function run(
     action: (signal: AbortSignal) => Promise<LibraryIdentity | void>,
     preserveParameters = false,
@@ -99,7 +105,7 @@ export function VisualIdentityLibrary({
     setNotice('')
     try {
       const result = await action(controller.signal)
-      const list = await identitiesApi.list(controller.signal)
+      const list = await api.list(controller.signal)
       if (controller.signal.aborted) return
       setEntries(list)
       onChange(
@@ -137,14 +143,20 @@ export function VisualIdentityLibrary({
     }
     void run((signal) =>
       selected
-        ? identitiesApi.update(selected.id, value.revision ?? selected.revision, value, signal)
-        : identitiesApi.create(value, signal),
+        ? api.update(selected.id, value.revision ?? selected.revision, value, signal)
+        : api.create(value, signal),
     )
   }
   return (
     <section aria-label="Bibliothèque d’identités visuelles">
       {error != null && <ErrorNotice error={error} />}
       {notice && <p role="status">{notice}</p>}
+      {workspace && <p>Identités de cet espace. Enregistrer ne signifie pas approuver.</p>}
+      {selected && <p role="status">{selected.name} · révision {selected.revision} · {selected.isActive ? 'Active' : 'Inactive'} · {selected.approvalId ? 'Approuvée' : 'Enregistrée, non approuvée'}</p>}
+      {workspace && selected && canManage && <button type="button" disabled={busy || !selected.isActive || !!selected.approvalId || JSON.stringify(value) !== JSON.stringify(effectiveIdentity(selected))} onClick={() => void run(async signal => {
+        await api.approve(selected.id, selected.revision, signal)
+        return (await api.list(signal)).find(x => x.id === selected.id)
+      })}>Approuver cette révision enregistrée</button>}
       {busy && <p role="status">Chargement de la bibliothèque…</p>}
       <fieldset disabled={busy}>
         <label>
@@ -172,6 +184,7 @@ export function VisualIdentityLibrary({
           Les ajustements ci-dessous concernent la prochaine génération. La bibliothèque ne change
           que si vous cliquez sur Enregistrer.
         </p>
+        <fieldset disabled={!canManage}>
         <VisualIdentityEditor value={value} onChange={onChange} localLibrary={false} />
         <div className="visual-actions">
           <button type="button" className="button" onClick={save}>
@@ -196,7 +209,7 @@ export function VisualIdentityLibrary({
                 onClick={() =>
                   void run(
                     (signal) =>
-                      identitiesApi.setDefault(
+                      api.setDefault(
                         selected.id,
                         value.revision ?? selected.revision,
                         signal,
@@ -213,7 +226,7 @@ export function VisualIdentityLibrary({
                 onClick={() =>
                   void run(
                     (signal) =>
-                      identitiesApi.update(
+                      api.update(
                         selected.id,
                         value.revision ?? selected.revision,
                         { ...effectiveIdentity(selected), isActive: !selected.isActive },
@@ -235,7 +248,7 @@ export function VisualIdentityLibrary({
                     )
                   )
                     void run((signal) =>
-                      identitiesApi.remove(
+                      api.remove(
                         selected.id,
                         value.revision ?? selected.revision,
                         signal,
@@ -252,7 +265,7 @@ export function VisualIdentityLibrary({
             className="text-button"
             onClick={() =>
               void run(async (signal) => {
-                const list = await identitiesApi.list(signal)
+                const list = await api.list(signal)
                 return list.find((v) => v.id === value.libraryId)
               })
             }
@@ -260,6 +273,7 @@ export function VisualIdentityLibrary({
             Actualiser la bibliothèque
           </button>
         </div>
+        </fieldset>
         {selected && (
           <>
             {!selected.isActive && (
@@ -267,11 +281,12 @@ export function VisualIdentityLibrary({
                 Cette identité est désactivée et ne peut pas servir à une génération.
               </p>
             )}
-            <IdentityLogoPreview identity={selected} />
+            <IdentityLogoPreview identity={selected} workspace={workspace} />
             <label className="button">
               Importer le logo officiel
               <input
                 type="file"
+                disabled={!canManage}
                 className="visual-file-input"
                 aria-label="Importer le logo officiel"
                 accept="image/png,image/jpeg"
@@ -294,7 +309,7 @@ export function VisualIdentityLibrary({
                   }
                   void run(
                     (signal) =>
-                      identitiesApi.uploadLogo(
+                      api.uploadLogo(
                         selected.id,
                         value.revision ?? selected.revision,
                         file,
@@ -311,7 +326,7 @@ export function VisualIdentityLibrary({
             </p>
           </>
         )}
-        <button
+        {!workspace && <button
           type="button"
           className="text-button"
           onClick={() => {
@@ -329,7 +344,7 @@ export function VisualIdentityLibrary({
           }}
         >
           Récupérer les anciennes identités de ce navigateur
-        </button>
+        </button>}
         {legacy.length > 0 && (
           <label>
             Identité locale à récupérer

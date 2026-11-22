@@ -10,6 +10,10 @@ public sealed class SocialFlowDbContext(DbContextOptions<SocialFlowDbContext> op
 {
     public Guid? ActiveWorkspaceId => workspace?.WorkspaceId;
     public DbSet<Workspace> Workspaces => Set<Workspace>();
+    public DbSet<WorkspaceTerm> WorkspaceTerms => Set<WorkspaceTerm>();
+    public DbSet<WorkspaceTermRevision> WorkspaceTermRevisions => Set<WorkspaceTermRevision>();
+    public DbSet<WorkspaceEditorialProfile> WorkspaceEditorialProfiles => Set<WorkspaceEditorialProfile>();
+    public DbSet<VisualIdentityApproval> VisualIdentityApprovals => Set<VisualIdentityApproval>();
     public DbSet<SocialConnection> SocialConnections => Set<SocialConnection>();
     public DbSet<LinkedInAutomation> LinkedInAutomations => Set<LinkedInAutomation>();
     public DbSet<SocialOAuthSession> SocialOAuthSessions => Set<SocialOAuthSession>();
@@ -30,6 +34,10 @@ public sealed class SocialFlowDbContext(DbContextOptions<SocialFlowDbContext> op
         base.OnModelCreating(modelBuilder);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(SocialFlowDbContext).Assembly);
         Tenant<SocialPost>(modelBuilder);
+        Tenant<WorkspaceTerm>(modelBuilder);
+        Tenant<WorkspaceTermRevision>(modelBuilder);
+        Tenant<WorkspaceEditorialProfile>(modelBuilder);
+        Tenant<VisualIdentityApproval>(modelBuilder);
         Tenant<AiGeneration>(modelBuilder);
         Tenant<KnowledgeDocument>(modelBuilder);
         Tenant<KnowledgeChunk>(modelBuilder);
@@ -54,6 +62,10 @@ public sealed class SocialFlowDbContext(DbContextOptions<SocialFlowDbContext> op
     private void GuardWrites()
     {
         ChangeTracker.DetectChanges();
+        if (ChangeTracker.Entries<WorkspaceTermRevision>().Any(e => e.State is EntityState.Modified or EntityState.Deleted))
+            throw new InvalidOperationException("Terminology history is immutable.");
+        if (ChangeTracker.Entries<VisualIdentityApproval>().Any(e => e.State is EntityState.Modified or EntityState.Deleted))
+            throw new InvalidOperationException("Approval history is immutable.");
         foreach (var entry in ChangeTracker.Entries<IWorkspaceResource>().Where(e => e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted))
         {
             var id = ActiveWorkspaceId ?? throw new InvalidOperationException("An explicit workspace context is required for writes.");

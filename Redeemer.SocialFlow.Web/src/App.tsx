@@ -176,7 +176,7 @@ export default function App({
             .filter(([id]) =>
               id === 'publication-settings' ? canOpenSettings : id === 'social-connections'
                 ? !localAdministration
-                : localAdministration || id !== 'identities',
+                : true,
             )
             .map(([id, { title, icon: Icon }]) => (
               <a
@@ -309,7 +309,7 @@ export default function App({
             localAdministration ? (
               <VisualIdentities />
             ) : (
-              <p role="alert">Cette fonctionnalité n’est pas disponible dans cet espace.</p>
+              <VisualIdentities key={workspaceId} workspace canManage={canManageSocial} />
             )
           ) : page === 'trash' ? (
             <Trash revision={revision} />
@@ -346,6 +346,7 @@ export default function App({
       </div>
       {generating && (
         <GenerateDraft
+          workspace={!localAdministration}
           close={() => setGenerating(false)}
           saved={({ draft: { post, warnings }, referencePassages }) => {
             setAiWarnings((current) => ({ ...current, [post.id]: warnings }))

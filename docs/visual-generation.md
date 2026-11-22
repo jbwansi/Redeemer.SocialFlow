@@ -2,9 +2,8 @@
 
 Le moteur est enregistré par `AddOpenAIVisualGeneration` dans le host API.
 L'enregistrement est différé : aucun appel réseau au démarrage, aucune configuration
-image nécessaire pour les workflows texte existants. Aucun endpoint n'invoque
-encore ce moteur. Aucun stockage, traitement des photos, logo, migration ou
-adaptation LinkedIn n'est ajouté dans cette phase.
+image nécessaire pour les workflows texte existants. Le parcours actuel prépare et
+valide un [concept visuel](visual-concepts.md) avant d'invoquer ce moteur.
 
 ## Contrat Application
 
@@ -13,7 +12,7 @@ adaptation LinkedIn n'est ajouté dans cette phase.
 modèle configuré, identité, plateforme, brief utilisé, MIME, dimensions lues dans
 l'en-tête, longueur, qualité demandée et date locale de fin de génération).
 
-Le futur cas d'usage transmettra `SocialPost.VisualBrief` ou sa valeur éditée ;
+Le cas d'usage transmet le titre, le contenu, la plateforme et le brief enregistrés ;
 le moteur n'accède pas à la base et ne modifie pas le post. Le brief non vide est
 limité à 4000 caractères. `VisualIdentity` fournit un identifiant, un nom, un style,
 un slogan facultatif et une palette copiée de 1 à 8 couleurs #RRGGBB. Les identités
@@ -22,7 +21,7 @@ sont propres à chaque requête ; aucune marque n'est codée en dur.
 Les valeurs descriptives sont sérialisées en JSON dans le prompt et traitées comme
 données. La politique interdit de générer ou d'imiter un logo et réserve sa place
 pour une future composition déterministe. Un prompt ne garantit pas à lui seul
-la conformité du rendu : validation humaine requise dans une phase ultérieure.
+la conformité du rendu : validation humaine du concept puis du candidat requise.
 Aucune photo importée n'est transmise à OpenAI.
 
 ## Configuration indépendante

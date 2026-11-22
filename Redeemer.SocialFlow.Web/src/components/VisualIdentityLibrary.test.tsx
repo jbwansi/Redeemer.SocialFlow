@@ -150,6 +150,7 @@ it('keeps edited fields after a revision conflict', async () => {
   expect(screen.getByLabelText('Nom de l’identité')).toHaveValue('Redeemer Holding adjusted')
 })
 it('sends selected identity revision and temporary settings only on explicit generation', async () => {
+  vi.spyOn(visualsApi, 'prepare').mockResolvedValue({ subject: 'Saved title', message: 'Saved message', scene: 'Scene', brief: 'Garden', style: 'Modern adjusted', exclusions: [], conceptToken: 'approved-concept' })
   vi.mocked(visualsApi.runtime).mockResolvedValue({ enabled: true })
   vi.spyOn(visualsApi, 'list').mockResolvedValue([])
   render(<PostVisuals post={post()} brief="Garden" />)
@@ -159,12 +160,15 @@ it('sends selected identity revision and temporary settings only on explicit gen
   expect(visualsApi.generate).not.toHaveBeenCalled()
   await userEvent.click(screen.getByText('Identité visuelle pour la génération'))
   await userEvent.type(screen.getByLabelText('Style visuel'), ' adjusted')
+  await userEvent.click(screen.getByRole('button', { name: 'Préparer le concept (sans coût)' }))
+  await userEvent.click(await screen.findByRole('checkbox', { name: 'Je valide ce concept avant la génération payante' }))
   await userEvent.click(screen.getByRole('button', { name: 'Générer un visuel' }))
   expect(visualsApi.generate).toHaveBeenCalledWith(
     'post-1',
     expect.objectContaining({ libraryId: 'rh', revision: 1, style: 'Modern adjusted' }),
     'Garden',
     expect.any(AbortSignal),
+    'approved-concept',
   )
   expect(identitiesApi.update).not.toHaveBeenCalled()
 })

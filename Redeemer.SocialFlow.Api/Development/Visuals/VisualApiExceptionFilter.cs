@@ -15,6 +15,9 @@ public sealed class VisualApiExceptionFilter : IExceptionFilter
     {
         var (status, title) = context.Exception switch
         {
+            Infrastructure.Terminology.TermNotFoundException => (404, "Terme introuvable dans cet espace."),
+            VisualConceptException { Code: "EditorialContextRequired" } => (400, "Enregistrez un titre et un contenu éditorial avant de préparer le concept."),
+            VisualConceptException => (409, "Enregistrez vos modifications, puis préparez et validez à nouveau le concept visuel."),
             IdentityNotFoundException or VisualNotFoundException or PostNotFoundException => (404, "Visual or post not found"),
             DomainException or DbUpdateConcurrencyException => (409, "Modification impossible : état incompatible, référence existante ou version périmée. Actualisez les données."),
             InvalidVisualException or ArgumentException => (400, "Invalid image or generation request"),
@@ -25,7 +28,8 @@ public sealed class VisualApiExceptionFilter : IExceptionFilter
         };
         // Never allow SDK/configuration/storage exception payloads into global exception logging.
         context.Result = new ObjectResult(new ProblemDetails { Status = status, Title = title,
-            Extensions = { ["traceId"] = context.HttpContext.TraceIdentifier } }) { StatusCode = status };
+            Extensions = { ["traceId"] = context.HttpContext.TraceIdentifier,
+                ["code"] = context.Exception is VisualConceptException concept ? concept.Code : "VisualOperationFailed" } }) { StatusCode = status };
         context.ExceptionHandled = true;
     }
 }
